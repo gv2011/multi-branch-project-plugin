@@ -23,6 +23,19 @@
  */
 package com.github.mjdetullio.jenkins.plugins.multibranch;
 
+import hudson.Extension;
+import hudson.Util;
+import hudson.console.AnnotatedLargeText;
+import hudson.init.InitMilestone;
+import hudson.init.Initializer;
+import hudson.model.AbstractProject;
+import hudson.model.Action;
+import hudson.model.Item;
+import hudson.model.Items;
+import hudson.triggers.Trigger;
+import hudson.triggers.TriggerDescriptor;
+import hudson.util.StreamTaskListener;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
@@ -37,18 +50,6 @@ import org.apache.commons.jelly.XMLOutput;
 import org.kohsuke.stapler.DataBoundConstructor;
 
 import antlr.ANTLRException;
-import hudson.Extension;
-import hudson.Util;
-import hudson.console.AnnotatedLargeText;
-import hudson.init.InitMilestone;
-import hudson.init.Initializer;
-import hudson.model.AbstractProject;
-import hudson.model.Action;
-import hudson.model.Item;
-import hudson.model.Items;
-import hudson.triggers.Trigger;
-import hudson.triggers.TriggerDescriptor;
-import hudson.util.StreamTaskListener;
 
 /**
  * An internal cron-based trigger used to sync branches (sub-projects) for
@@ -56,11 +57,9 @@ import hudson.util.StreamTaskListener;
  *
  * @author Matthew DeTullio
  */
-public class SyncBranchesTrigger extends Trigger<AbstractMultiBranchProject> {
+public class SyncBranchesTrigger<P extends AbstractMultiBranchProject<?,?>> extends Trigger<P> {
 	private static final String CLASSNAME = SyncBranchesTrigger.class.getName();
 	private static final Logger LOGGER = Logger.getLogger(CLASSNAME);
-
-	private static final String UNUSED = "unused";
 
 	/**
 	 * Creates a new {@link SyncBranchesTrigger} that gets {@link #run() run}
@@ -69,7 +68,7 @@ public class SyncBranchesTrigger extends Trigger<AbstractMultiBranchProject> {
 	 * @param cronTabSpec - cron this trigger should run on
 	 */
 	@DataBoundConstructor
-	public SyncBranchesTrigger(String cronTabSpec) throws ANTLRException {
+	public SyncBranchesTrigger(final String cronTabSpec) throws ANTLRException {
 		super(cronTabSpec);
 	}
 
@@ -87,9 +86,9 @@ public class SyncBranchesTrigger extends Trigger<AbstractMultiBranchProject> {
 		}
 
 		try {
-			StreamTaskListener listener = new StreamTaskListener(getLogFile());
+			final StreamTaskListener listener = new StreamTaskListener(getLogFile());
 
-			long start = System.currentTimeMillis();
+			final long start = System.currentTimeMillis();
 
 			listener.getLogger().println(
 					"Started on " + DateFormat.getDateTimeInstance().format(
@@ -101,7 +100,7 @@ public class SyncBranchesTrigger extends Trigger<AbstractMultiBranchProject> {
 					System.currentTimeMillis() - start));
 
 			listener.close();
-		} catch (IOException e) {
+		} catch (final IOException e) {
 			LOGGER.log(Level.SEVERE,
 					"Failed to record sync branches log for " + job, e);
 		}
@@ -132,7 +131,6 @@ public class SyncBranchesTrigger extends Trigger<AbstractMultiBranchProject> {
 		 *
 		 * @return action owner
 		 */
-		@SuppressWarnings(UNUSED)
 		public AbstractProject<?, ?> getOwner() {
 			return job.asProject();
 		}
@@ -166,7 +164,6 @@ public class SyncBranchesTrigger extends Trigger<AbstractMultiBranchProject> {
 		 *
 		 * @return the log
 		 */
-		@SuppressWarnings(UNUSED)
 		public String getLog() throws IOException {
 			return Util.loadFile(getLogFile());
 		}
@@ -174,7 +171,7 @@ public class SyncBranchesTrigger extends Trigger<AbstractMultiBranchProject> {
 		/**
 		 * Writes the annotated log to the given output.
 		 */
-		public void writeLogTo(XMLOutput out) throws IOException {
+		public void writeLogTo(final XMLOutput out) throws IOException {
 			new AnnotatedLargeText<SyncBranchesAction>(getLogFile(),
 					Charset.defaultCharset(), true, this).writeHtmlTo(0,
 					out.asWriter());
@@ -186,14 +183,13 @@ public class SyncBranchesTrigger extends Trigger<AbstractMultiBranchProject> {
 	 * configuration.
 	 */
 	@Extension
-	@SuppressWarnings(UNUSED)
 	public static class DescriptorImpl extends TriggerDescriptor {
 		/**
 		 * Trigger should not appear in configuration, so mark this as false.
 		 * <p/> Inherited docs: <p/> {@inheritDoc}
 		 */
 		@Override
-		public boolean isApplicable(Item item) {
+		public boolean isApplicable(final Item item) {
 			return false;
 		}
 
@@ -210,7 +206,6 @@ public class SyncBranchesTrigger extends Trigger<AbstractMultiBranchProject> {
 	 * Gives this class an alias for configuration XML.
 	 */
 	@Initializer(before = InitMilestone.PLUGINS_STARTED)
-	@SuppressWarnings(UNUSED)
 	public static void registerXStream() {
 		Items.XSTREAM.alias("sync-branches-trigger", SyncBranchesTrigger.class);
 	}

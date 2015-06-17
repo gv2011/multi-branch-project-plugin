@@ -40,8 +40,6 @@ import jenkins.model.Jenkins;
 public class FreeStyleMultiBranchProject extends AbstractMultiBranchProject
 		<FreeStyleProject, FreeStyleBuild> {
 
-	private static final String UNUSED = "unused";
-
 	/**
 	 * Constructor that specifies the {@link ItemGroup} for this project and the
 	 * project name.
@@ -49,14 +47,13 @@ public class FreeStyleMultiBranchProject extends AbstractMultiBranchProject
 	 * @param parent - the project's parent {@link ItemGroup}
 	 * @param name   - the project's name
 	 */
-	public FreeStyleMultiBranchProject(ItemGroup parent, String name) {
-		super(parent, name);
+	public FreeStyleMultiBranchProject(final ItemGroup<?> parent, final String name) {
+		super(parent, name, FreeStyleProject.class);
 	}
 
 	@Override
-	protected FreeStyleProject createNewSubProject(
-			AbstractMultiBranchProject parent, String branchName) {
-		return new FreeStyleProject(parent, branchName);
+	protected FreeStyleProject createNewSubProject(final String branchName) {
+		return new FreeStyleProject(this, branchName);
 	}
 
 	/**
@@ -93,7 +90,7 @@ public class FreeStyleMultiBranchProject extends AbstractMultiBranchProject
 		 * {@inheritDoc}
 		 */
 		@Override
-		public TopLevelItem newInstance(ItemGroup parent, String name) {
+		public TopLevelItem newInstance(final ItemGroup parent, final String name) {
 			return new FreeStyleMultiBranchProject(parent, name);
 		}
 	}
@@ -102,7 +99,6 @@ public class FreeStyleMultiBranchProject extends AbstractMultiBranchProject
 	 * Gives this class an alias for configuration XML.
 	 */
 	@Initializer(before = InitMilestone.PLUGINS_STARTED)
-	@SuppressWarnings(UNUSED)
 	public static void registerXStream() {
 		Items.XSTREAM.alias("freestyle-multi-branch-project",
 				FreeStyleMultiBranchProject.class);

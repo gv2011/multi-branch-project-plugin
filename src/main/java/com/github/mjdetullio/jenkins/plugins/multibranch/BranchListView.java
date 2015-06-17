@@ -23,8 +23,6 @@
  */
 package com.github.mjdetullio.jenkins.plugins.multibranch;
 
-import org.kohsuke.stapler.DataBoundConstructor;
-
 import hudson.Extension;
 import hudson.init.InitMilestone;
 import hudson.init.Initializer;
@@ -32,6 +30,8 @@ import hudson.model.Items;
 import hudson.model.ListView;
 import hudson.model.TopLevelItem;
 import hudson.model.ViewGroup;
+
+import org.kohsuke.stapler.DataBoundConstructor;
 
 /**
  * Wrapper for {@link ListView} that provides additional support for listing
@@ -41,16 +41,13 @@ import hudson.model.ViewGroup;
  */
 public class BranchListView extends ListView {
 
-	private static final String UNUSED = "unused";
-
 	/**
 	 * Constructor used for loading objects of this type.
 	 *
 	 * @param name - Name of view
 	 */
 	@DataBoundConstructor
-	@SuppressWarnings(UNUSED)
-	public BranchListView(String name) {
+	public BranchListView(final String name) {
 		super(name);
 	}
 
@@ -60,8 +57,7 @@ public class BranchListView extends ListView {
 	 * @param name  - Name of view
 	 * @param owner - Owner of view
 	 */
-	@SuppressWarnings(UNUSED)
-	public BranchListView(String name, ViewGroup owner) {
+	public BranchListView(final String name, final ViewGroup owner) {
 		super(name, owner);
 	}
 
@@ -69,8 +65,7 @@ public class BranchListView extends ListView {
 	 * Alias for {@link #getItem(String)}. This is the one used in the URL
 	 * binding.
 	 */
-	@SuppressWarnings(UNUSED)
-	public final TopLevelItem getBranch(String name) {
+	public final TopLevelItem getBranch(final String name) {
 		return getItem(name);
 	}
 
@@ -80,7 +75,6 @@ public class BranchListView extends ListView {
 	 *
 	 * @return String - cron
 	 */
-	@SuppressWarnings(UNUSED)
 	public String getConfigureUrl() {
 		return getOwner().getUrl() + "configure";
 	}
@@ -88,7 +82,6 @@ public class BranchListView extends ListView {
 	/**
 	 * Stapler URL binding
 	 */
-	@SuppressWarnings(UNUSED)
 	public final void doNewJob() {
 		throw new UnsupportedOperationException(
 				"New jobs cannot be created for this project directly.");
@@ -97,7 +90,6 @@ public class BranchListView extends ListView {
 	/**
 	 * Stapler URL binding
 	 */
-	@SuppressWarnings(UNUSED)
 	public final void doCreateItem() {
 		throw new UnsupportedOperationException(
 				"New jobs cannot be created for this project directly.");
@@ -122,7 +114,6 @@ public class BranchListView extends ListView {
 	 * Gives this class an alias for configuration XML.
 	 */
 	@Initializer(before = InitMilestone.PLUGINS_STARTED)
-	@SuppressWarnings(UNUSED)
 	public static void registerXStream() {
 		Items.XSTREAM.alias("branch-list-view", BranchListView.class);
 	}

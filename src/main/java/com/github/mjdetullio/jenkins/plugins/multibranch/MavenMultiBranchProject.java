@@ -23,15 +23,6 @@
  */
 package com.github.mjdetullio.jenkins.plugins.multibranch;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
-import javax.servlet.ServletException;
-
-import org.kohsuke.stapler.QueryParameter;
-
 import hudson.FilePath;
 import hudson.init.InitMilestone;
 import hudson.init.Initializer;
@@ -42,6 +33,13 @@ import hudson.model.Items;
 import hudson.model.TopLevelItemDescriptor;
 import hudson.util.FormValidation;
 
+import java.io.IOException;
+import java.util.logging.Logger;
+
+import javax.servlet.ServletException;
+
+import org.kohsuke.stapler.QueryParameter;
+
 /**
  * @author Matthew DeTullio
  */
@@ -49,6 +47,7 @@ public class MavenMultiBranchProject extends
 		AbstractMultiBranchProject<MavenModuleSet, MavenModuleSetBuild> {
 
 	private static final String CLASSNAME = MavenMultiBranchProject.class.getName();
+	@SuppressWarnings("unused")
 	private static final Logger LOGGER = Logger.getLogger(CLASSNAME);
 
 	private static final String UNUSED = "unused";
@@ -60,14 +59,13 @@ public class MavenMultiBranchProject extends
 	 * @param parent - the project's parent {@link hudson.model.ItemGroup}
 	 * @param name   - the project's name
 	 */
-	public MavenMultiBranchProject(ItemGroup parent, String name) {
-		super(parent, name);
+	public MavenMultiBranchProject(final ItemGroup<?> parent, final String name) {
+		super(parent, name, MavenModuleSet.class);
 	}
 
 	@Override
-	protected MavenModuleSet createNewSubProject(
-			AbstractMultiBranchProject parent, String branchName) {
-		return new MavenModuleSet(parent, branchName);
+	protected MavenModuleSet createNewSubProject(final String branchName) {
+		return new MavenModuleSet(this, branchName);
 	}
 
 	@Override
@@ -89,13 +87,12 @@ public class MavenMultiBranchProject extends
 	 * @param value - file to check
 	 * @return validation of file
 	 */
-	@SuppressWarnings(UNUSED)
-	public FormValidation doCheckFileInWorkspace(@QueryParameter String value)
+	public FormValidation doCheckFileInWorkspace(@QueryParameter final String value)
 			throws IOException,
 			ServletException {
-		MavenModuleSetBuild lb = getLastBuild();
+		final MavenModuleSetBuild lb = getLastBuild();
 		if (lb != null) {
-			FilePath ws = lb.getModuleRoot();
+			final FilePath ws = lb.getModuleRoot();
 			if (ws != null) {
 				return ws.validateRelativePath(value, true, true);
 			}
