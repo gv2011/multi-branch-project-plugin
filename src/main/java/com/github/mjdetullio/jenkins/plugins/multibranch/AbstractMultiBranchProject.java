@@ -374,6 +374,11 @@ public abstract class AbstractMultiBranchProject<P extends AbstractProject<P, B>
 	protected abstract P createNewSubProject(AbstractMultiBranchProject parent,
 			String branchName);
 
+	private String getProjectName(final SCMHead branchName) {
+		return branchName.getName().replace('/', '-');
+	}
+
+
 	/**
 	 * Stapler URL binding for ${rootUrl}/job/${project}/branch/${branchProject}
 	 *
@@ -972,51 +977,49 @@ public abstract class AbstractMultiBranchProject<P extends AbstractProject<P, B>
 		 * the old one, always use getSubProjects() so synchronization is
 		 * maintained.
 		 */
-		Map<String, SCMHead> branches = new HashMap<String, SCMHead>();
-		Set<String> newBranches = new HashSet<String>();
-		for (SCMHead head : heads) {
-			String branchName = head.getName();
-			branches.put(branchName, head);
-
-			if (!getSubProjects().containsKey(branchName)) {
+		final Set<SCMHead> newBranches = new HashSet<SCMHead>();
+		final Map<String,SCMHead> branchesByProjectName = new HashMap<String,SCMHead>();
+		for (final SCMHead head : heads) {
+			final String projectName = getProjectName(head);
+			branchesByProjectName.put(projectName, head);
+			if (!getSubProjects().containsKey(projectName)) {
 				// Add new projects
 				listener.getLogger().println(
-						"Creating project for branch " + branchName);
+						"Creating project " + projectName);
 				try {
-					getSubProjects().put(branchName,
-							createNewSubProject(this, branchName));
-					newBranches.add(branchName);
-				} catch (Throwable e) {
+					final P newSubProject = createNewSubProject(this, projectName);
+					getSubProjects().put(projectName, newSubProject);
+					newBranches.add(head);
+				} catch (final Throwable e) {
 					e.printStackTrace(listener.fatalError(e.getMessage()));
 				}
 			}
 		}
 
 		// Delete all the sub-projects for branches that no longer exist
-		Iterator<Map.Entry<String, P>> iter = getSubProjects().entrySet().iterator();
+		final Iterator<P> iter = getSubProjects().values().iterator();
 		while (iter.hasNext()) {
-			Map.Entry<String, P> entry = iter.next();
-
-			if (!branches.containsKey(entry.getKey())) {
+			final P project = iter.next();
+			if (!branchesByProjectName.containsKey(project.getName())) {
 				listener.getLogger().println(
-						"Deleting project for branch " + entry.getKey());
+						"Deleting project " + project.getName());
 				try {
 					iter.remove();
-					entry.getValue().delete();
-				} catch (Throwable e) {
+					project.delete();
+				} catch (final Throwable e) {
 					e.printStackTrace(listener.fatalError(e.getMessage()));
 				}
 			}
 		}
 
 		// Sync config for existing branch projects
-		XmlFile configFile = templateProject.getConfigFile();
-		for (P project : getSubProjects().values()) {
+		final XmlFile configFile = templateProject.getConfigFile();
+		for (final P project : getSubProjects().values()) {
 			listener.getLogger().println(
 					"Syncing configuration to project for branch "
 							+ project.getName());
 			try {
-				boolean wasDisabled = project.isDisabled();
+				final boolean wasDisabled = project.isDisabled();
 
 				configFile.unmarshal(project);
 
@@ -1027,8 +1030,9 @@ public abstract class AbstractMultiBranchProject<P extends AbstractProject<P, B>
 				 * the wrong location during save, load, and elsewhere if SCM
 				 * remains null (or NullSCM).
 				 */
+				final SCMHead branch = branchesByProjectName.get(project.getName());
 				project.setScm(
-						scmSource.build(branches.get(project.getName())));
+						scmSource.build(branch));
 
 				if (!wasDisabled) {
 					project.enable();
@@ -1040,7 +1044,7 @@ public abstract class AbstractMultiBranchProject<P extends AbstractProject<P, B>
 
 				//noinspection unchecked
 				project.onLoad(project.getParent(), project.getName());
-			} catch (Throwable e) {
+			} catch (final Throwable e) {
 				e.printStackTrace(listener.fatalError(e.getMessage()));
 			}
 		}
@@ -1053,14 +1057,15 @@ public abstract class AbstractMultiBranchProject<P extends AbstractProject<P, B>
 
 		// Trigger build for new branches
 		// TODO make this optional
-		for (String branch : newBranches) {
+		for (final SCMHead branch : newBranches) {
 			listener.getLogger().println(
 					"Scheduling build for branch " + branch);
 			try {
-				P project = getSubProjects().get(branch);
+				final String projectName = getProjectName(branch);
+				final P project = getSubProjects().get(projectName);
 				project.scheduleBuild(
 						new SCMTrigger.SCMTriggerCause("New branch detected."));
-			} catch (Throwable e) {
+			} catch (final Throwable e) {
 				e.printStackTrace(listener.fatalError(e.getMessage()));
 			}
 		}
