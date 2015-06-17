@@ -115,10 +115,10 @@ import edu.umd.cs.findbugs.annotations.NonNull;
 /**
  * @author Matthew DeTullio
  */
-public abstract class AbstractMultiBranchProject<P extends AbstractMultiBranchProject<P, B> & TopLevelItem, B extends AbstractBuild<P, B>>
-		extends AbstractProject<P, B>
-		implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
-
+public abstract class AbstractMultiBranchProject<P extends AbstractProject<P, B> & TopLevelItem, B extends AbstractBuild<P, B>>
+extends AbstractProject<P, B>
+implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
+	
 	private static final String CLASSNAME = AbstractMultiBranchProject.class.getName();
 	private static final Logger LOGGER = Logger.getLogger(CLASSNAME);
 
@@ -857,7 +857,7 @@ public abstract class AbstractMultiBranchProject<P extends AbstractMultiBranchPr
 		Jenkins.getInstance().rebuildDependencyGraphAsync();
 		//endregion AbstractProject mirror
 
-		final SyncBranchesTrigger<P> syncBranchesTrigger = getSyncBranchesTrigger();
+		final SyncBranchesTrigger<?> syncBranchesTrigger = getSyncBranchesTrigger();
 		new Thread(getName()+"-sync-branches"){
 			@Override
 			public void run() {
@@ -882,7 +882,7 @@ public abstract class AbstractMultiBranchProject<P extends AbstractMultiBranchPr
 			// triggers() should only have our single SyncBranchesTrigger
 			triggers().clear();
 
-			addTrigger(new SyncBranchesTrigger<P>(cronTabSpec));
+			addTrigger(new SyncBranchesTrigger(cronTabSpec));
 		}
 
 		for (@SuppressWarnings("rawtypes") final Trigger trigger : triggers()) {
@@ -898,7 +898,7 @@ public abstract class AbstractMultiBranchProject<P extends AbstractMultiBranchPr
 	 *
 	 * @return SyncBranchesTrigger that is non-null and valid
 	 */
-	private synchronized SyncBranchesTrigger<P> getSyncBranchesTrigger() {
+	private synchronized SyncBranchesTrigger<?> getSyncBranchesTrigger() {
 		if (triggers().size() != 1
 				|| !(triggers().get(0) instanceof SyncBranchesTrigger)
 				|| triggers().get(0).getSpec() == null) {
