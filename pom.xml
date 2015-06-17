@@ -29,7 +29,7 @@
 
 	<scm>
 		<connection>scm:git:git://github.com/gv2011/multi-branch-project-plugin.git</connection>
-		<developerConnection>scm:git:git@github.gv2011/multi-branch-project-plugin.git</developerConnection>
+		<developerConnection>scm:git:git@github.com:gv2011/multi-branch-project-plugin.git</developerConnection>
 		<url>https://github.com/gv2011/multi-branch-project-plugin</url>
 		<tag>HEAD</tag>
 	</scm>
