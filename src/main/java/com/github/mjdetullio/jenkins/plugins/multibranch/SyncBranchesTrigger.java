@@ -50,6 +50,7 @@ import org.apache.commons.jelly.XMLOutput;
 import org.kohsuke.stapler.DataBoundConstructor;
 
 import antlr.ANTLRException;
+import edu.umd.cs.findbugs.annotations.CheckForNull;
 
 /**
  * An internal cron-based trigger used to sync branches (sub-projects) for
@@ -71,6 +72,24 @@ public class SyncBranchesTrigger<P extends AbstractMultiBranchProject<?,?>> exte
 	public SyncBranchesTrigger(final String cronTabSpec) throws ANTLRException {
 		super(cronTabSpec);
 	}
+	
+	
+
+	@Override
+	public synchronized void start(final P project, final boolean newInstance) {
+		super.start(project, newInstance);
+	}
+
+	@CheckForNull
+	private synchronized P optionalJob(){
+		return job;
+	}
+
+	private P job(){
+		final P job = optionalJob();
+		if(job==null) throw new IllegalStateException("No job.");
+		return job;
+	}
 
 	/**
 	 * {@inheritDoc}
@@ -81,6 +100,7 @@ public class SyncBranchesTrigger<P extends AbstractMultiBranchProject<?,?>> exte
 		 * The #start(Item, boolean) method provides the job so this will be null
 		 * only when invoked directly before starting.
 		 */
+		final P job = optionalJob();
 		if (job == null) {
 			return;
 		}
@@ -110,7 +130,7 @@ public class SyncBranchesTrigger<P extends AbstractMultiBranchProject<?,?>> exte
 	 * Returns the file that records the last/current sync branches activity.
 	 */
 	public File getLogFile() {
-		return new File(job.getRootDir(), "sync-branches.log");
+		return new File(job().getRootDir(), "sync-branches.log");
 	}
 
 	/**

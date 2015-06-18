@@ -142,6 +142,9 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 
 	private volatile transient ViewsTabBar viewsTabBar;
 	
+	private transient boolean syncInProgress;
+	private transient boolean repeatSync;
+	
 	protected abstract Class<P> projectClass();
 
 	/**
@@ -1003,15 +1006,41 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	 * its exceptions to the listener.
 	 */
 	public void syncBranches(final TaskListener listener) {
+		boolean startSync;
 		if (isDisabled()) {
 			listener.getLogger().println("Project disabled.");
-			return;
+			startSync = false;
 		}
-
-		try {
-			_syncBranches(listener);
-		} catch (final Throwable e) {
-			e.printStackTrace(listener.fatalError(e.getMessage()));
+		else{
+			synchronized(this){
+				//Ensure there is only one active sync thread at any time.
+				//If there is a new request while a sync is in progress, 
+				//do the sync again after it has finished.
+				if(syncInProgress){
+					startSync = false;
+					repeatSync = true;
+				}else{
+					startSync = true;
+					repeatSync = false;
+					syncInProgress = true;
+				}
+			}
+		}
+		while(startSync){
+			try {
+				_syncBranches(listener);
+			} catch (final Throwable e) {
+				e.printStackTrace(listener.fatalError(e.getMessage()));
+			} finally{
+				synchronized(this){
+					if(repeatSync){
+						repeatSync = false;
+					}else{
+						syncInProgress = false;
+						startSync = false;
+					}
+				}
+			}
 		}
 	}
 
@@ -1081,8 +1110,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 				 * remains null (or NullSCM).
 				 */
 				final SCMHead branch = branchesByProjectName.get(project.getName());
-				project.setScm(
-						scmSource.build(branch));
+				project.setScm(scmSource.build(branch));
 
 				if (!wasDisabled) {
 					project.enable();
