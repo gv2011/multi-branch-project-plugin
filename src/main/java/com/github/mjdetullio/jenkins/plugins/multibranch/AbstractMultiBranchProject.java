@@ -450,6 +450,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	 */
 	@Override
 	public synchronized Collection<P> getItems() {
+		ensureSubProjectsNotNull();
 		return Collections.unmodifiableList(new ArrayList<P>(subProjects.values()));
 	}
 
