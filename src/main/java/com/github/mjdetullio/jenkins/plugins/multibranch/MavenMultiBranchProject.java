@@ -60,8 +60,17 @@ public class MavenMultiBranchProject extends
 	 * @param name   - the project's name
 	 */
 	public MavenMultiBranchProject(final ItemGroup<?> parent, final String name) {
-		super(parent, name, MavenModuleSet.class);
+		super(parent, name);
 	}
+	
+	
+
+	@Override
+	protected Class<MavenModuleSet> projectClass() {
+		return MavenModuleSet.class;
+	}
+
+
 
 	@Override
 	protected MavenModuleSet createNewSubProject(final String branchName) {

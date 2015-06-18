@@ -55,7 +55,6 @@ import hudson.triggers.SCMTrigger;
 import hudson.triggers.Trigger;
 import hudson.util.DescribableList;
 import hudson.util.FormValidation;
-import hudson.util.PersistedList;
 import hudson.util.TimeUnit2;
 import hudson.views.DefaultViewsTabBar;
 import hudson.views.ViewsTabBar;
@@ -77,7 +76,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -122,36 +120,35 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	private static final String CLASSNAME = AbstractMultiBranchProject.class.getName();
 	private static final Logger LOGGER = Logger.getLogger(CLASSNAME);
 
-	private static final String TEMPLATE = "template";
+	static final String TEMPLATE = "template";
 	private static final String DEFAULT_SYNC_SPEC = "H/5 * * * *";
 
-	private boolean allowAnonymousSync;
+	private volatile boolean allowAnonymousSync;
 
 	protected volatile SCMSource scmSource;
 
-	protected transient P templateProject;
+	protected volatile transient P templateProject;
 
 	private transient Map<String, P> subProjects;
 
 	private List<String> disabledSubProjects;
 
-	private transient ViewGroupMixIn viewGroupMixIn;
+	private volatile transient ViewGroupMixIn viewGroupMixIn;
 
-	private List<View> views;
+	private List<View> viewsx;
 
 	protected volatile String primaryView;
 
-	private transient ViewsTabBar viewsTabBar;
+	private volatile transient ViewsTabBar viewsTabBar;
 	
-	private final Class<P> projectClass;
+	protected abstract Class<P> projectClass();
 
 	/**
 	 * {@inheritDoc}
 	 */
-	public AbstractMultiBranchProject(final ItemGroup<?> parent, final String name, final Class<P> projectClass) {
+	public AbstractMultiBranchProject(final ItemGroup<?> parent, final String name) {
 		super(parent, name);
 		init();
-		this.projectClass = projectClass;
 	}
 
 	/**
@@ -162,13 +159,20 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 			throws IOException {
 		super.onLoad(parent, name);
 		runBranchProjectMigration();
-		init();
+//		init();
+	}
+	
+	private synchronized List<View> getViewList(){
+		if(viewsx==null){
+			viewsx = new CopyOnWriteArrayList<View>();
+		}
+		return viewsx;
 	}
 
-	private synchronized void runBranchProjectMigration() {
-		if (disabledSubProjects == null) {
-			disabledSubProjects = new PersistedList<String>(this);
-		}
+	private void runBranchProjectMigration() {
+//		if (disabledSubProjects == null) {
+//			disabledSubProjects = new PersistedList<String>(this);
+//		}
 
 		final List<File> subProjects = new ArrayList<File>();
 		subProjects.add(getTemplateDir());
@@ -210,8 +214,8 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 				if (isDisabled()) {
 					if (!subProjectDir.equals(getTemplateDir()) && xml.matches(
 							"(?ms).+(\r?\n)  <disabled>true</disabled>(\r?\n).+")) {
-						disabledSubProjects.add(
-								rawDecode(subProjectDir.getName()));
+//						disabledSubProjects.add(
+//								rawDecode(subProjectDir.getName()));
 					}
 
 					xml = xml.replaceFirst(
@@ -278,14 +282,12 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	 * (ItemGroup, String)} or when a project is loaded from disk with {@link
 	 * #onLoad(ItemGroup, String)}.
 	 */
-	protected synchronized void init() {
-		if (disabledSubProjects == null) {
-			disabledSubProjects = new PersistedList<String>(this);
-		}
+	protected void init() {
+//		if (disabledSubProjects == null) {
+//			disabledSubProjects = new PersistedList<String>(this);
+//		}
 
-		if (views == null) {
-			views = new CopyOnWriteArrayList<View>();
-		}
+		final List<View> views = getViewList();
 		if (views.size() == 0) {
 			final BranchListView listView = new BranchListView("All", this);
 			views.add(listView);
@@ -319,11 +321,12 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 		};
 
 		try {
+			P templateProject;
 			if (!(new File(getTemplateDir(), "config.xml").isFile())) {
 				templateProject = createNewSubProject(TEMPLATE);
 			} else {
 				//noinspection unchecked
-				templateProject = projectClass.cast(Items.load(this, getTemplateDir()));
+				templateProject = projectClass().cast(Items.load(this, getTemplateDir()));
 			}
 
 			// Prevent tampering
@@ -331,6 +334,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 				templateProject.setScm(new NullSCM());
 			}
 			templateProject.disable();
+			this.templateProject = templateProject;
 		} catch (final IOException e) {
 			LOGGER.log(Level.WARNING,
 					"Failed to load template project " + getTemplateDir(), e);
@@ -349,9 +353,9 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 					item.onLoad(this, rawDecode(branch.getName()));
 
 					//noinspection unchecked
-					final P project = projectClass.cast(item);
-
-					getSubProjects().put(item.getName(), project);
+					final P project = projectClass().cast(item);
+					
+					addSubProject(project);
 
 					// Handle offline tampering of disabled setting
 					if (isDisabled() && !project.isDisabled()) {
@@ -367,6 +371,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 		// Will check triggers(), add & start default sync cron if not there
 		getSyncBranchesTrigger();
 	}
+
 
 	/**
 	 * Defines how sub-projects should be created when provided the parent and
@@ -397,18 +402,11 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	 * Retrieves the template sub-project.  Used by configure-entries.jelly.
 	 */
 	public P getTemplate() {
-		return templateProject;
+		final P result = this.templateProject;
+		if(result==null) throw new IllegalStateException("No template project available.");
+		return result;
 	}
 
-	/**
-	 * Retrieves the collection of sub-projects for this project.
-	 */
-	protected synchronized Map<String, P> getSubProjects() {
-		if (subProjects == null) {
-			subProjects = new LinkedHashMap<String, P>();
-		}
-		return subProjects;
-	}
 
 	/**
 	 * Returns the "branches" directory inside the project directory.  This is
@@ -441,10 +439,73 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	 * {@inheritDoc}
 	 */
 	@Override
-	public Collection<P> getItems() {
-		return getSubProjects().values();
+	public synchronized Collection<P> getItems() {
+		return Collections.unmodifiableList(new ArrayList<P>(subProjects.values()));
 	}
 
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	@CheckForNull
+	public synchronized P getItem(final String name) {
+		ensureSubProjectsNotNull();
+		return subProjects.get(name);
+	}
+	
+	private synchronized void ensureSubProjectsNotNull(){
+		if(subProjects==null) subProjects = new HashMap<>();		
+	}
+	
+	private synchronized void addSubProject(final P project) {		
+		ensureSubProjectsNotNull();
+		if(project==null) throw new IllegalArgumentException();
+		final String projectName = project.getName();
+		if(projectName==null) throw new IllegalArgumentException();
+		if(subProjects==null) subProjects = new HashMap<>();
+		else if(subProjects.containsKey(projectName)) throw new IllegalArgumentException("Project "+projectName+" already there.");
+		subProjects.put(projectName, project);
+	}
+	
+	private boolean createSubProjectIfItDoesNotExist(final String projectName, final TaskListener listener){
+		boolean create;
+		synchronized(this){
+			ensureSubProjectsNotNull();
+			create = !subProjects.containsKey(projectName);
+			}
+		if(create){
+			//Race condition tolerated: If meanwhile a project with the same name was created by a
+			//different thread, addSubProject will fail.
+			listener.getLogger().println("Creating project " + projectName);
+			final P newSubProject = createNewSubProject(projectName);
+			addSubProject(newSubProject);
+		}
+		return create;
+	}
+
+	private void deleteSubProject(final String projectName) throws IOException, InterruptedException {
+		P project;
+		synchronized(this){
+			ensureSubProjectsNotNull();
+			project = subProjects.get(projectName);
+			if(project!=null){
+				subProjects.remove(projectName);
+			}
+		}
+		if(project!=null) project.delete();
+	}
+	
+	/**
+	 * {@inheritDoc}
+	 * @throws IOException 
+	 */
+	@Override
+	public synchronized void onDeleted(final P subProject) throws IOException {
+		subProjects.remove(subProject.getName());
+	}
+
+
+	
 	/**
 	 * {@inheritDoc}
 	 */
@@ -453,13 +514,6 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 		return "branch";
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
-	@Override
-	public P getItem(final String name) {
-		return getSubProjects().get(name);
-	}
 
 	/**
 	 * {@inheritDoc}
@@ -482,14 +536,6 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	public void onRenamed(final P item, final String oldName, final String newName) {
 		throw new UnsupportedOperationException(
 				"Renaming sub-projects is not supported.  They should only be added or deleted.");
-	}
-
-	/**
-	 * {@inheritDoc}
-	 */
-	@Override
-	public void onDeleted(final P item) {
-		getSubProjects().remove(item.getName());
 	}
 
 	//endregion ItemGroup implementation
@@ -580,6 +626,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	@Override
 	@NonNull
 	public List<SCMSource> getSCMSources() {
+		final SCMSource scmSource = this.scmSource;
 		if (scmSource == null) {
 			return Collections.emptyList();
 		}
@@ -592,6 +639,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	@Override
 	@CheckForNull
 	public SCMSource getSCMSource(@CheckForNull final String sourceId) {
+		final SCMSource scmSource = this.scmSource;
 		if (scmSource != null && scmSource.getId().equals(sourceId)) {
 			return scmSource;
 		}
@@ -630,6 +678,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	 *
 	 * @return the project's only SCMSource (may be null)
 	 */
+	@CheckForNull
 	public SCMSource getSCMSource() {
 		return scmSource;
 	}
@@ -810,6 +859,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 				scmSource.setOwner(this);
 			}
 
+			final P templateProject = getTemplate();
 			templateProject.doConfigSubmit(
 					new TemplateStaplerRequestWrapper(req), rsp);
 
@@ -934,7 +984,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	 * disabled, then calling {@link #_syncBranches(TaskListener)} and logging
 	 * its exceptions to the listener.
 	 */
-	public synchronized void syncBranches(final TaskListener listener) {
+	public void syncBranches(final TaskListener listener) {
 		if (isDisabled()) {
 			listener.getLogger().println("Project disabled.");
 			return;
@@ -952,29 +1002,12 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	 * updates all sub-project configurations with the configuration specified
 	 * by this project.
 	 */
-	private synchronized void _syncBranches(final TaskListener listener)
+	private void _syncBranches(final TaskListener listener)
 			throws IOException, InterruptedException {
-		// No SCM to source from, so delete all the branch projects
-		if (scmSource == null) {
-			listener.getLogger().println("SCM not selected.");
-
-			for (final P project : getSubProjects().values()) {
-				listener.getLogger().println(
-						"Deleting project for branch " + project.getName());
-				try {
-					project.delete();
-				} catch (final Throwable e) {
-					e.printStackTrace(listener.fatalError(e.getMessage()));
-				}
-			}
-
-			getSubProjects().clear();
-
-			return;
-		}
 
 		// Check SCM for branches
-		final Set<SCMHead> heads = scmSource.fetch(listener);
+		final SCMSource scmSource = this.scmSource;
+		final Set<SCMHead> branches = scmSource==null?Collections.<SCMHead>emptySet():scmSource.fetch(listener);
 
 		/*
 		 * Rather than creating a new Map for subProjects and swapping with
@@ -983,32 +1016,27 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 		 */
 		final Set<SCMHead> newBranches = new HashSet<SCMHead>();
 		final Map<String,SCMHead> branchesByProjectName = new HashMap<String,SCMHead>();
-		for (final SCMHead head : heads) {
-			final String projectName = getProjectName(head);
-			branchesByProjectName.put(projectName, head);
-			if (!getSubProjects().containsKey(projectName)) {
-				// Add new projects
-				listener.getLogger().println("Creating project " + projectName);
-				try {
-					final P newSubProject = createNewSubProject(projectName);
-					getSubProjects().put(projectName, newSubProject);
-					newBranches.add(head);
-				} catch (final Throwable e) {
-					e.printStackTrace(listener.fatalError(e.getMessage()));
-				}
+		for (final SCMHead branch : branches) {
+			final String projectName = getProjectName(branch);
+			branchesByProjectName.put(projectName, branch);
+			try {
+				final boolean created = createSubProjectIfItDoesNotExist(projectName, listener);
+				if(created) newBranches.add(branch);
+			} catch (final Throwable e) {
+				e.printStackTrace(listener.fatalError(e.getMessage()));
 			}
 		}
 
 		// Delete all the sub-projects for branches that no longer exist
-		final Iterator<P> iter = getSubProjects().values().iterator();
-		while (iter.hasNext()) {
-			final P project = iter.next();
-			if (!branchesByProjectName.containsKey(project.getName())) {
+		final Iterator<P> subProjects = getItems().iterator();
+		while (subProjects.hasNext()) {
+			final P project = subProjects.next();
+			final String projectName = project.getName();
+			if (!branchesByProjectName.containsKey(projectName)) {
 				listener.getLogger().println(
-						"Deleting project " + project.getName());
+						"Deleting project " + projectName);
 				try {
-					iter.remove();
-					project.delete();
+					deleteSubProject(projectName);
 				} catch (final Throwable e) {
 					e.printStackTrace(listener.fatalError(e.getMessage()));
 				}
@@ -1016,10 +1044,11 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 		}
 
 		// Sync config for existing branch projects
+		final P templateProject = getTemplate();
 		final XmlFile configFile = templateProject.getConfigFile();
-		for (final P project : getSubProjects().values()) {
+		for (final P project : getItems()) {
 			listener.getLogger().println(
-					"Syncing configuration to project for branch "
+					"Syncing configuration to project "
 							+ project.getName());
 			try {
 				final boolean wasDisabled = project.isDisabled();
@@ -1045,8 +1074,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 				project.setCustomWorkspace(
 						templateProject.getCustomWorkspace());
 
-				//noinspection unchecked
-				project.onLoad(project.getParent(), project.getName());
+				project.onLoad(this, project.getName());
 			} catch (final Throwable e) {
 				e.printStackTrace(listener.fatalError(e.getMessage()));
 			}
@@ -1065,8 +1093,8 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 					"Scheduling build for branch " + branch);
 			try {
 				final String projectName = getProjectName(branch);
-				final P project = getSubProjects().get(projectName);
-				project.scheduleBuild(
+				final P project = getItem(projectName);
+				if(project!=null) project.scheduleBuild(
 						new SCMTrigger.SCMTriggerCause("New branch detected."));
 			} catch (final Throwable e) {
 				e.printStackTrace(listener.fatalError(e.getMessage()));
@@ -1177,28 +1205,28 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 			 * parent (and therefore, all sub-projects) are already disabled will
 			 * add all branches.  Obviously not desirable.
 			 */
-			if (disabledSubProjects.isEmpty()) {
-				for (final P project : getSubProjects().values()) {
-					if (project.isDisabled()) {
-						disabledSubProjects.add(project.getName());
-					}
-				}
-			}
+//			if (disabledSubProjects.isEmpty()) {
+//				for (final P project : getSubProjects().values()) {
+//					if (project.isDisabled()) {
+//						disabledSubProjects.add(project.getName());
+//					}
+//				}
+//			}
 
 			// Always forcefully disable all sub-projects
-			for (final P project : getSubProjects().values()) {
+			for (final P project : getItems()) {
 				project.disable();
 			}
 		} else {
 			// Re-enable only the projects that weren't manually marked disabled
-			for (final P project : getSubProjects().values()) {
-				if (!disabledSubProjects.contains(project.getName())) {
+			for (final P project : getItems()) {
+//				if (!disabledSubProjects.contains(project.getName())) {
 					project.enable();
-				}
+//				}
 			}
 
 			// Clear the list so it can be rebuilt when parent is disabled
-			disabledSubProjects.clear();
+//			disabledSubProjects.clear();
 
 			/*
 			 * Apparently the great authors of PersistedList decided you don't
@@ -1238,7 +1266,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	@Override
 	public DescribableList<Publisher, Descriptor<Publisher>> getPublishersList() {
 		// TODO: is this ok?
-		return templateProject.getPublishersList();
+		return getTemplate().getPublishersList();
 	}
 
 	@Override
@@ -1402,7 +1430,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 				 * Remove template from branches directory if there isn't a
 				 * sub-project with the same name.
 				 */
-				if (!parent.getSubProjects().containsKey(TEMPLATE)) {
+				if (parent.getItem(TEMPLATE)==null) {
 					try {
 						FileUtils.deleteDirectory(
 								new File(parent.getBranchesDir(), TEMPLATE));

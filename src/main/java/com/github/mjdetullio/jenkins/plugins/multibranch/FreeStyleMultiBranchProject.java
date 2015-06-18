@@ -48,8 +48,17 @@ public class FreeStyleMultiBranchProject extends AbstractMultiBranchProject
 	 * @param name   - the project's name
 	 */
 	public FreeStyleMultiBranchProject(final ItemGroup<?> parent, final String name) {
-		super(parent, name, FreeStyleProject.class);
+		super(parent, name);
 	}
+
+	
+	
+	@Override
+	protected final Class<FreeStyleProject> projectClass() {
+		return FreeStyleProject.class;
+	}
+
+
 
 	@Override
 	protected FreeStyleProject createNewSubProject(final String branchName) {
