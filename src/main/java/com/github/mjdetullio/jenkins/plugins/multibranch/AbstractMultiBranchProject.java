@@ -53,6 +53,7 @@ import hudson.scm.NullSCM;
 import hudson.tasks.Publisher;
 import hudson.triggers.SCMTrigger;
 import hudson.triggers.Trigger;
+import hudson.util.CopyOnWriteList;
 import hudson.util.DescribableList;
 import hudson.util.FormValidation;
 import hudson.util.TimeUnit2;
@@ -150,6 +151,12 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 		super(parent, name);
 		init();
 	}
+	
+	protected synchronized final String name(){
+		final String name = this.name;
+		if(name==null) throw new IllegalStateException("No name.");
+		return name;
+	}
 
 	/**
 	 * {@inheritDoc}
@@ -159,7 +166,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 			throws IOException {
 		super.onLoad(parent, name);
 		runBranchProjectMigration();
-//		init();
+		init();
 	}
 	
 	private synchronized List<View> getViewList(){
@@ -791,6 +798,13 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 		getSyncBranchesTrigger().run();
 	}
 
+	
+	protected final synchronized CopyOnWriteList<JobProperty<? super P>> properties(){
+		final CopyOnWriteList<JobProperty<? super P>> properties = this.properties;
+		if(properties==null) throw new IllegalStateException("No properties.");
+		return properties;
+	}
+	
 	/**
 	 * {@inheritDoc}
 	 */
@@ -820,6 +834,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 			t.rebuild(req, json.optJSONObject("properties"),
 					JobPropertyDescriptor.getPropertyDescriptors(
 							this.getClass()));
+			final CopyOnWriteList<JobProperty<? super P>> properties = properties();
 			properties.clear();
 			for (final JobProperty p : t) {
 				// Hack to set property owner since it is not exposed
@@ -847,6 +862,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 
 			primaryView = json.getString("primaryView");
 
+			SCMSource scmSource;
 			final JSONObject scmSourceJson = json.optJSONObject("scmSource");
 			if (scmSourceJson == null) {
 				scmSource = null;
@@ -858,6 +874,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 				scmSource = descriptor.newInstance(req, scmSourceJson);
 				scmSource.setOwner(this);
 			}
+			this.scmSource = scmSource;
 
 			final P templateProject = getTemplate();
 			templateProject.doConfigSubmit(
@@ -867,6 +884,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 			// TODO could this be used to trigger syncBranches()?
 			ItemListener.fireOnUpdated(this);
 
+			final String name = name();
 			final String newName = req.getParameter("name");
 			final ProjectNamingStrategy namingStrategy = Jenkins.getInstance().getProjectNamingStrategy();
 			if (newName != null && !newName.equals(name)) {
