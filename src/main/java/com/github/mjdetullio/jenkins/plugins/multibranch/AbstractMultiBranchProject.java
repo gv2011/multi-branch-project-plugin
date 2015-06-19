@@ -648,7 +648,12 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 			public boolean isHead(@NonNull final Probe probe,
 					@NonNull final TaskListener listener)
 					throws IOException {
+				
+				
+				
 				final SCMHead branch = new SCMHead(probe.name());
+				
+				
 				final Date lastChange = new Date(probe.lastModified());
 				final SubProjectRegistry<P, B> reg = getSubProjects();
 				final boolean accepted = reg.getBranchNameMapper().branchNameSupported(branch);
