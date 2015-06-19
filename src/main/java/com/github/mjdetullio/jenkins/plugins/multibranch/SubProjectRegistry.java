@@ -12,21 +12,19 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.NavigableMap;
-import java.util.SortedSet;
-import java.util.TreeMap;
-import java.util.TreeSet;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import jenkins.scm.api.SCMHead;
 import edu.umd.cs.findbugs.annotations.CheckForNull;
 
-class SubProjectRegistry<P extends AbstractProject<P, B> & TopLevelItem, B extends AbstractBuild<P, B>>{
+class SubProjectRegistry<P extends AbstractProject<P, B> & TopLevelItem, B extends AbstractBuild<P, B>>
+implements BranchAgeSupplier{
 	
 	private final Object lock = new Object();
 	private final Map<String,SubProject<P,B>> projectsByName = new HashMap<>();
 	private final BranchNameMapper mapper = new BranchNameMapperImpl();
-	
+	private final BranchesFilter branchesFilter = new AgeBranchesFilter(this, 12, 50, TimeUnit.HOURS.toMillis(24), TimeUnit.DAYS.toMillis(7));
 	
 
 	final BranchNameMapper getBranchNameMapper() {
@@ -114,42 +112,23 @@ class SubProjectRegistry<P extends AbstractProject<P, B> & TopLevelItem, B exten
 		getOrAddSubProject(branch).setLastChange(lastChange);
 	}
 	
-	SortedSet<SCMHead> filterBranches(final Iterable<? extends SCMHead> branches, final Integer maxCount, final Long minTime, final Long maxTime){
-		//Sort branches by age and ignore branches without a date or older than maxTime
-		final TreeMap<Long,SCMHead> byAge = new TreeMap<>();
-		final long now = System.currentTimeMillis();
-		for(final SCMHead branch: branches){
-			if(mapper.branchNameSupported(branch)){
-				final String projectName = mapper.getProjectName(branch);
-				final SubProject<P, B> subProject = getSubProject(projectName);
-				if(subProject!=null){
-					final Date lastChange = subProject.lastChange();
-					if(lastChange!=null){
-						final long age = now-lastChange.getTime();
-						if(maxTime==null?true:age<=maxTime.longValue()) byAge.put(age, branch);
-					}
-				}
-			}
+	
+	
+	@Override
+	@CheckForNull
+	public Date lastChange(final SCMHead branch) {
+		if(!mapper.branchNameSupported(branch)) return null;
+		else{
+			final SubProject<P, B> subProject = getSubProject(mapper.getProjectName(branch));
+			if(subProject==null) return null;
+			else return subProject.lastChange();
 		}
-		NavigableMap<Long, SCMHead> result = null;
-		if(maxCount==null?false:byAge.size()>maxCount.intValue()){
-			if(minTime!=null){
-				//Include all that are younger than minTime, even if maxCount is exceeded:
-				final NavigableMap<Long, SCMHead> youngest = byAge.headMap(minTime.longValue(), true);
-				if(youngest.size()>=maxCount.intValue()) result = youngest;
-			}
-			if(result==null){
-				//Include the maxCount youngest entries:
-				final Long firstExcluded = new ArrayList<>(byAge.keySet()).get(maxCount.intValue());
-				result = byAge.headMap(firstExcluded, false);
-			}
-		}else{
-			//Don't filter further
-			result = byAge;
-		}
-		return Collections.unmodifiableSortedSet(new TreeSet<>(result.values()));
 	}
 	
+	BranchesFilter getBranchesFilter(){
+		return branchesFilter;
+	}
+
 	
 private static class SubProject<P extends AbstractProject<P, B> & TopLevelItem, B extends AbstractBuild<P, B>> {
 	

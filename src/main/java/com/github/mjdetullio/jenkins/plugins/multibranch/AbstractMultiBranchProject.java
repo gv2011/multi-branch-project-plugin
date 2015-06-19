@@ -82,7 +82,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -1038,7 +1037,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 		final SCMSource scmSource = this.scmSource;
 		final Set<SCMHead> allBranches = scmSource==null?Collections.<SCMHead>emptySet():scmSource.fetch(listener);
 		
-		final Set<SCMHead> branches = getSubProjects().filterBranches(allBranches, 12, TimeUnit.HOURS.toMillis(24), TimeUnit.DAYS.toMillis(7));
+		final Set<SCMHead> branches = getSubProjects().getBranchesFilter().filterBranches(allBranches);
 
 		/*
 		 * Rather than creating a new Map for subProjects and swapping with
