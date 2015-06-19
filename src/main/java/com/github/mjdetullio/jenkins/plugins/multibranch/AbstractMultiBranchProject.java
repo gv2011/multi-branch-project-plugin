@@ -90,6 +90,7 @@ import jenkins.scm.impl.SingleSCMSource;
 import net.sf.json.JSONException;
 import net.sf.json.JSONObject;
 
+import org.acegisecurity.Authentication;
 import org.apache.commons.io.FileUtils;
 import org.kohsuke.stapler.QueryParameter;
 import org.kohsuke.stapler.StaplerRequest;
@@ -886,14 +887,18 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 		// this is to reflect the upstream build adjustments done above
 		Jenkins.getInstance().rebuildDependencyGraphAsync();
 		//endregion AbstractProject mirror
+		
+		final Authentication authentication = Jenkins.getAuthentication();
+		LOGGER.info("Principal: "+authentication.getPrincipal());
+		LOGGER.info("Thread: "+Thread.currentThread().getName());
 
-		final SyncBranchesTrigger<?> syncBranchesTrigger = getSyncBranchesTrigger();
-		new Thread(getName()+"-sync-branches"){
-			@Override
-			public void run() {
-				syncBranchesTrigger.run();
-			}			
-		}.start();
+//		final SyncBranchesTrigger<?> syncBranchesTrigger = getSyncBranchesTrigger();
+//		new Thread(getName()+"-sync-branches"){
+//			@Override
+//			public void run() {
+//				syncBranchesTrigger.run();
+//			}			
+//		}.start();
 	}
 
 	/**
@@ -965,6 +970,9 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	 * its exceptions to the listener.
 	 */
 	public void syncBranches(final TaskListener listener) {
+		final Authentication authentication = Jenkins.getAuthentication();
+		LOGGER.info("Principal: "+authentication.getPrincipal());
+		LOGGER.info("Thread: "+Thread.currentThread().getName());
 		boolean startSync;
 		if (isDisabled()) {
 			listener.getLogger().println("Project disabled.");
