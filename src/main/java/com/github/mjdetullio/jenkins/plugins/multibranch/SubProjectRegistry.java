@@ -1,9 +1,7 @@
 package com.github.mjdetullio.jenkins.plugins.multibranch;
 
-import hudson.model.AbstractBuild;
-import hudson.model.AbstractProject;
+import hudson.model.AbstractItem;
 import hudson.model.TaskListener;
-import hudson.model.TopLevelItem;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -12,23 +10,22 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import jenkins.scm.api.SCMHead;
 import edu.umd.cs.findbugs.annotations.CheckForNull;
 
-class SubProjectRegistry<P extends AbstractProject<P, B> & TopLevelItem, B extends AbstractBuild<P, B>>
-implements BranchAgeSupplier{
+class SubProjectRegistry<P extends AbstractItem,B>
+implements BranchAgeListener{
 	
 	private final Object lock = new Object();
 	private final Map<String,SubProject<P,B>> projectsByName = new HashMap<>();
-	private final BranchNameMapper mapper = new BranchNameMapperImpl();
-	private final BranchesFilter branchesFilter = new AgeBranchesFilter(this, 12, 50, TimeUnit.HOURS.toMillis(24), TimeUnit.DAYS.toMillis(7));
 	
-
-	final BranchNameMapper getBranchNameMapper() {
-		return mapper;
+	private final BranchNameMapper mapper;
+	
+	SubProjectRegistry(final BranchNameMapper mapper) {
+		super();
+		this.mapper = mapper;
 	}
 
 	List<P> getProjects() {
@@ -78,16 +75,13 @@ implements BranchAgeSupplier{
 		}
 	}
 
-	boolean createProjectIfItDoesNotExist(final String projectName, final TaskListener listener, final ProjectFactory<P,B> projectFactory){
-		boolean create;
-		synchronized(lock){
-			create = !projectsByName.containsKey(projectName);
-			}
+	boolean createProjectIfItDoesNotExist(final String projectName, final TaskListener listener, final ProjectFactory<P> projectFactory){
+		final boolean create = getProject(projectName)==null;
 		if(create){
-			//Race condition tolerated: If meanwhile a project with the same name was created by a
-			//different thread, addSubProject will fail.
 			listener.getLogger().println("Creating project " + projectName);
 			final P newSubProject = projectFactory.createNewSubProject(projectName);
+			//Race condition tolerated on purpose: If meanwhile a project with the same name was created by a
+			//different thread, the following command will fail.
 			addProject(newSubProject);
 		}
 		return create;
@@ -108,15 +102,14 @@ implements BranchAgeSupplier{
 		}
 	}
 
-	void registerLastChange(final SCMHead branch, final Date lastChange) {
+	@Override
+	public void registerLastChange(final SCMHead branch, final Date lastChange) {
 		getOrAddSubProject(branch).setLastChange(lastChange);
 	}
+
 	
-	
-	
-	@Override
 	@CheckForNull
-	public Date lastChange(final SCMHead branch) {
+	Date lastChange(final SCMHead branch) {
 		if(!mapper.branchNameSupported(branch)) return null;
 		else{
 			final SubProject<P, B> subProject = getSubProject(mapper.getProjectName(branch));
@@ -125,12 +118,8 @@ implements BranchAgeSupplier{
 		}
 	}
 	
-	BranchesFilter getBranchesFilter(){
-		return branchesFilter;
-	}
-
 	
-private static class SubProject<P extends AbstractProject<P, B> & TopLevelItem, B extends AbstractBuild<P, B>> {
+private static class SubProject<P,B> {
 	
 	@SuppressWarnings("unused")
 	private final SCMHead branch;
@@ -154,7 +143,7 @@ private static class SubProject<P extends AbstractProject<P, B> & TopLevelItem, 
 	
 	private void setProject(final P project){
 		final boolean success = this.project.compareAndSet(null, project);
-		if(!success) throw new IllegalArgumentException("Project "+project.getName()+" already exists.");
+		if(!success) throw new IllegalArgumentException("Project "+project+" already exists.");
 	}
 	
 	private void setLastChange(final Date lastChange) {

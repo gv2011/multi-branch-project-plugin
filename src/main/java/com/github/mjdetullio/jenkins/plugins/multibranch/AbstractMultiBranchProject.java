@@ -51,7 +51,6 @@ import hudson.model.listeners.ItemListener;
 import hudson.model.listeners.SaveableListener;
 import hudson.scm.NullSCM;
 import hudson.tasks.Publisher;
-import hudson.triggers.SCMTrigger;
 import hudson.triggers.Trigger;
 import hudson.util.CopyOnWriteList;
 import hudson.util.DescribableList;
@@ -74,13 +73,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -89,7 +82,6 @@ import javax.servlet.ServletException;
 
 import jenkins.model.Jenkins;
 import jenkins.model.ProjectNamingStrategy;
-import jenkins.scm.api.SCMHead;
 import jenkins.scm.api.SCMSourceCriteria;
 import jenkins.scm.api.SCMSourceDescriptor;
 import jenkins.scm.api.SCMSourceOwner;
@@ -124,27 +116,31 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 
 	static final String TEMPLATE = "template";
 	private static final String DEFAULT_SYNC_SPEC = "H/5 * * * *";
-
+	
+	//Saved state:
 	private volatile boolean allowAnonymousSync;
+	private volatile SCMSource scmSource;
 
-	protected volatile SCMSource scmSource;
-
-	protected volatile transient P templateProject;
-
-	private transient volatile SubProjectRegistry<P,B> subProjects;
-
+	@SuppressWarnings("unused")
 	private List<String> disabledSubProjects;
-
-	private volatile transient ViewGroupMixIn viewGroupMixIn;
-
 	private List<View> viewsx;
 
-	protected volatile String primaryView;
-
-	private volatile transient ViewsTabBar viewsTabBar;
+	private volatile String primaryView;
 	
+	
+	//Dependent variables:
+	private transient volatile P templateProject;
+	
+	private transient volatile StaticWiring<P,B> staticWiring;
+
+	private transient volatile ViewGroupMixIn viewGroupMixIn;
+	private transient volatile ViewsTabBar viewsTabBar;
+
 	private transient boolean syncInProgress;
 	private transient boolean repeatSync;
+
+
+	
 	
 	protected abstract Class<P> projectClass();
 
@@ -350,7 +346,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 			LOGGER.log(Level.WARNING,
 					"Failed to load template project " + getTemplateDir(), e);
 		}
-
+		
 		if (getBranchesDir().isDirectory()) {
 			for (final File branch : getBranchesDir().listFiles(new FileFilter() {
 				@Override
@@ -392,12 +388,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	 * @param branchName - branch name
 	 * @return new sub-project of type {@link P}
 	 */
-	protected abstract ProjectFactory<P,B> getProjectFactory();
-
-	private String getProjectName(final SCMHead branchName) {
-		return getSubProjects().getBranchNameMapper().getProjectName(branchName);
-	}
-
+	protected abstract ProjectFactory<P> getProjectFactory();
 
 	/**
 	 * Stapler URL binding for ${rootUrl}/job/${project}/branch/${branchProject}
@@ -463,14 +454,18 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 		return getSubProjects().getProject(name);
 	}
 	
-	private synchronized SubProjectRegistry<P,B> getSubProjects(){
-		SubProjectRegistry<P,B> result = subProjects;
+	private SubProjectRegistry<P,B> getSubProjects(){
+		return getStaticWiring().getSubProjectRegistry();
+	}
+	
+	private StaticWiring<P,B> getStaticWiring(){
+		StaticWiring<P,B> result = staticWiring;
 		if(result==null){
 			synchronized(this){
-				if(subProjects==null){
-					subProjects = new SubProjectRegistry<>();	
+				if(staticWiring==null){
+					staticWiring = new StaticWiring<P,B>(getProjectFactory(), this, Jenkins.getInstance());	
 				}
-				result = subProjects;
+				result = staticWiring;
 			}
 		}
 		return result;
@@ -642,27 +637,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	@Override
 	@CheckForNull
 	public SCMSourceCriteria getSCMSourceCriteria(@NonNull final SCMSource source) {
-		return new SCMSourceCriteria() {
-			private static final long serialVersionUID = 3755225781981735415L;
-			@Override
-			public boolean isHead(@NonNull final Probe probe,
-					@NonNull final TaskListener listener)
-					throws IOException {
-				
-				
-				
-				final SCMHead branch = new SCMHead(probe.name());
-				
-				
-				final Date lastChange = new Date(probe.lastModified());
-				final SubProjectRegistry<P, B> reg = getSubProjects();
-				final boolean accepted = reg.getBranchNameMapper().branchNameSupported(branch);
-				if(accepted) {
-					reg.registerLastChange(branch, lastChange);
-				}
-				return accepted;
-			}
-		};
+		return getStaticWiring().getListeningBranchPreseletor();
 	}
 
 	//endregion SCMSourceOwner implementation
@@ -937,7 +912,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 			// triggers() should only have our single SyncBranchesTrigger
 			triggers().clear();
 
-			addTrigger(new SyncBranchesTrigger(cronTabSpec));
+			addTrigger(new SyncBranchesTrigger<>(cronTabSpec));
 		}
 
 		for (@SuppressWarnings("rawtypes") final Trigger trigger : triggers()) {
@@ -981,7 +956,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 			}
 		}
 
-		return (SyncBranchesTrigger) triggers().get(0);
+		return (SyncBranchesTrigger<?>) triggers().get(0);
 	}
 
 	/**
@@ -1012,7 +987,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 		}
 		while(startSync){
 			try {
-				_syncBranches(listener);
+				getStaticWiring().getSynchronizer().synchronizeBranches(scmSource, templateProject, listener);
 			} catch (final Throwable e) {
 				e.printStackTrace(listener.fatalError(e.getMessage()));
 			} finally{
@@ -1030,112 +1005,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 		}
 	}
 
-	/**
-	 * Synchronizes the available sub-projects with the available branches and
-	 * updates all sub-project configurations with the configuration specified
-	 * by this project.
-	 */
-	private void _syncBranches(final TaskListener listener)
-			throws IOException, InterruptedException {
-
-		// Check SCM for branches
-		final SCMSource scmSource = this.scmSource;
-		final Set<SCMHead> allBranches = scmSource==null?Collections.<SCMHead>emptySet():scmSource.fetch(listener);
-		
-		final Set<SCMHead> branches = getSubProjects().getBranchesFilter().filterBranches(allBranches);
-
-		/*
-		 * Rather than creating a new Map for subProjects and swapping with
-		 * the old one, always use getSubProjects() so synchronization is
-		 * maintained.
-		 */
-		final Set<SCMHead> newBranches = new HashSet<SCMHead>();
-		final Map<String,SCMHead> branchesByProjectName = new HashMap<String,SCMHead>();
-		for (final SCMHead branch : branches) {
-			final String projectName = getProjectName(branch);
-			branchesByProjectName.put(projectName, branch);
-			try {
-				final boolean created = getSubProjects().createProjectIfItDoesNotExist(projectName, listener, getProjectFactory());
-				if(created) newBranches.add(branch);
-			} catch (final Throwable e) {
-				e.printStackTrace(listener.fatalError(e.getMessage()));
-			}
-		}
-
-		// Delete all the sub-projects for branches that no longer exist
-		final Iterator<P> subProjects = getItems().iterator();
-		while (subProjects.hasNext()) {
-			final P project = subProjects.next();
-			final String projectName = project.getName();
-			if (!branchesByProjectName.containsKey(projectName)) {
-				listener.getLogger().println(
-						"Deleting project " + projectName);
-				try {
-					getSubProjects().deleteProject(projectName);
-				} catch (final Throwable e) {
-					e.printStackTrace(listener.fatalError(e.getMessage()));
-				}
-			}
-		}
-
-		// Sync config for existing branch projects
-		final P templateProject = getTemplate();
-		final XmlFile configFile = templateProject.getConfigFile();
-		for (final P project : getItems()) {
-			listener.getLogger().println(
-					"Syncing configuration to project "
-							+ project.getName());
-			try {
-				final boolean wasDisabled = project.isDisabled();
-
-				configFile.unmarshal(project);
-
-				/*
-				 * Build new SCM with the URL and branch already set.
-				 *
-				 * SCM must be set first since getRootDirFor(project) will give
-				 * the wrong location during save, load, and elsewhere if SCM
-				 * remains null (or NullSCM).
-				 */
-				final SCMHead branch = branchesByProjectName.get(project.getName());
-				project.setScm(scmSource.build(branch));
-
-				if (!wasDisabled) {
-					project.enable();
-				}
-
-				// Work-around for JENKINS-21017
-				project.setCustomWorkspace(
-						templateProject.getCustomWorkspace());
-
-				project.onLoad(this, project.getName());
-			} catch (final Throwable e) {
-				e.printStackTrace(listener.fatalError(e.getMessage()));
-			}
-		}
-
-		// notify the queue as the projects might be now tied to different node
-		Jenkins.getInstance().getQueue().scheduleMaintenance();
-
-		// this is to reflect the upstream build adjustments done above
-		Jenkins.getInstance().rebuildDependencyGraphAsync();
-
-		// Trigger build for new branches
-		// TODO make this optional
-		for (final SCMHead branch : newBranches) {
-			listener.getLogger().println(
-					"Scheduling build for branch " + branch);
-			try {
-				final String projectName = getProjectName(branch);
-				final P project = getItem(projectName);
-				if(project!=null) project.scheduleBuild(
-						new SCMTrigger.SCMTriggerCause("New branch detected."));
-			} catch (final Throwable e) {
-				e.printStackTrace(listener.fatalError(e.getMessage()));
-			}
-		}
-	}
-
+	
 	/**
 	 * Used by Jelly to populate the Sync Branches Schedule field on the
 	 * configuration page.

@@ -8,42 +8,44 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
+import javax.annotation.Nullable;
+
 import jenkins.scm.api.SCMHead;
 
-public class AgeBranchesFilter implements BranchesFilter{
+import com.google.common.base.Function;
+
+public class AgeBranchesFilter implements Function<Iterable<? extends SCMHead>, Set<SCMHead>>{
 	
-	private final BranchAgeSupplier branchAgeSupplier;
+	private final Function<SCMHead, Date> lastChangeSupplier;
 
 	final Integer normalCount;
 	final Integer maxCount;
 	final Long minTime;
-	final Long maxTime;
 	
 	
 
 	public AgeBranchesFilter(
-			final BranchAgeSupplier branchAgeSupplier, final Integer normalCount,
-			final Integer maxCount, final Long minTime, final Long maxTime) {
+			final Function<SCMHead, Date> lastChangeSupplier, final Integer normalCount,
+			final Integer maxCount, final Long minTime) {
 		super();
-		this.branchAgeSupplier = branchAgeSupplier;
+		this.lastChangeSupplier = lastChangeSupplier;
 		this.normalCount = normalCount;
 		this.maxCount = maxCount;
 		this.minTime = minTime;
-		this.maxTime = maxTime;
 	}
 
 
 
 	@Override
-	public Set<SCMHead> filterBranches(final Iterable<? extends SCMHead> branches) {
+	public Set<SCMHead> apply(@Nullable final Iterable<? extends SCMHead> branches) {
 			//Sort branches by age and ignore branches without a date or older than maxTime
 			NavigableMap<Long, SCMHead> byAge = new TreeMap<>();
 			final long now = System.currentTimeMillis();
 			for(final SCMHead branch: branches){
-				final Date lastChange = branchAgeSupplier.lastChange(branch);
+				final Date lastChange = lastChangeSupplier.apply(branch);
 				if(lastChange!=null){
 					final long age = now-lastChange.getTime();
-					if(maxTime==null?true:age<=maxTime.longValue()) byAge.put(age, branch);
+					byAge.put(age, branch);
 				}
 			}
 			
@@ -71,5 +73,6 @@ public class AgeBranchesFilter implements BranchesFilter{
 			}
 			return Collections.unmodifiableSortedSet(new TreeSet<>(result.values()));
 		}
+
 
 }

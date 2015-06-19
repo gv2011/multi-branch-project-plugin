@@ -39,7 +39,7 @@ import jenkins.model.Jenkins;
  */
 public class FreeStyleMultiBranchProject 
 	extends AbstractMultiBranchProject<FreeStyleProject, FreeStyleBuild> 
-	implements ProjectFactory<FreeStyleProject, FreeStyleBuild>{
+	implements ProjectFactory<FreeStyleProject>{
 
 	/**
 	 * Constructor that specifies the {@link ItemGroup} for this project and the
@@ -69,7 +69,7 @@ public class FreeStyleMultiBranchProject
 	
 
 	@Override
-	protected ProjectFactory<FreeStyleProject, FreeStyleBuild> getProjectFactory() {
+	protected ProjectFactory<FreeStyleProject> getProjectFactory() {
 		return this;
 	}
 

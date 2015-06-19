@@ -45,7 +45,7 @@ import org.kohsuke.stapler.QueryParameter;
  */
 public class MavenMultiBranchProject 
 	extends AbstractMultiBranchProject<MavenModuleSet, MavenModuleSetBuild> 
-	implements ProjectFactory<MavenModuleSet, MavenModuleSetBuild>{
+	implements ProjectFactory<MavenModuleSet>{
 
 	private static final String CLASSNAME = MavenMultiBranchProject.class.getName();
 	@SuppressWarnings("unused")
@@ -72,7 +72,7 @@ public class MavenMultiBranchProject
 	}
 
 	@Override
-	protected ProjectFactory<MavenModuleSet, MavenModuleSetBuild> getProjectFactory() {
+	protected ProjectFactory<MavenModuleSet> getProjectFactory() {
 		return this;
 	}
 
