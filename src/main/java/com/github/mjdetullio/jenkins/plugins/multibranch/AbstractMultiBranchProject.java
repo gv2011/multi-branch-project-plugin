@@ -131,6 +131,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	
 	//Dependent variables:
 	private transient volatile P templateProject;
+	private transient SCMSource scmSourceCache;
 	
 	private transient volatile StaticWiring<P,B> staticWiring;
 
@@ -158,7 +159,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 		if(name==null) throw new IllegalStateException("No name.");
 		return name;
 	}
-
+	
 	/**
 	 * {@inheritDoc}
 	 */
@@ -604,7 +605,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	@Override
 	@NonNull
 	public List<SCMSource> getSCMSources() {
-		final SCMSource scmSource = this.scmSource;
+		final SCMSource scmSource = getSCMSource();
 		if (scmSource == null) {
 			return Collections.emptyList();
 		}
@@ -617,7 +618,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	@Override
 	@CheckForNull
 	public SCMSource getSCMSource(@CheckForNull final String sourceId) {
-		final SCMSource scmSource = this.scmSource;
+		final SCMSource scmSource = getSCMSource();
 		if (scmSource != null && scmSource.getId().equals(sourceId)) {
 			return scmSource;
 		}
@@ -649,9 +650,29 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	 * @return the project's only SCMSource (may be null)
 	 */
 	@CheckForNull
-	public SCMSource getSCMSource() {
-		return scmSource;
+	public synchronized SCMSource getSCMSource() {
+		final SCMSource scmSource = this.scmSource;
+		if(scmSourceCache!=scmSource){
+			//scmSource from persistence mechanism
+			if(scmSource.getOwner()!=this){
+				scmSource.setOwner(this);
+			}
+			scmSourceCache = scmSource;
+		}
+		if(scmSourceCache.getOwner()!=this){
+			scmSourceCache.setOwner(this);
+		}
+		return scmSourceCache;
 	}
+	
+	private synchronized void setSCMSource(final SCMSource scmSource) {		
+		if(scmSource.getOwner()!=this){
+			scmSource.setOwner(this);
+		}
+		this.scmSource = scmSource;		
+		this.scmSourceCache = scmSource;		
+	}
+
 
 	/**
 	 * Gets whether anonymous sync is allowed from <code>${JOB_URL}/syncBranches</code>
@@ -837,7 +858,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 				scmSource = descriptor.newInstance(req, scmSourceJson);
 				scmSource.setOwner(this);
 			}
-			this.scmSource = scmSource;
+			setSCMSource(scmSource);
 
 			final P templateProject = getTemplate();
 			templateProject.doConfigSubmit(
@@ -900,6 +921,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 //			}			
 //		}.start();
 	}
+
 
 	/**
 	 * Stops all triggers, then if a non-null spec is given clears all triggers
@@ -976,7 +998,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 //			startSync = false;
 		}
 		else{
-			getStaticWiring().getSynchronizer().synchronizeBranches(scmSource, templateProject, listener);
+			getStaticWiring().getSynchronizer().synchronizeBranches(getSCMSource(), templateProject, listener);
 //			synchronized(this){
 //				//Ensure there is only one active sync thread at any time.
 //				//If there is a new request while a sync is in progress, 
