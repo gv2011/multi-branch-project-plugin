@@ -2,7 +2,7 @@ package com.github.mjdetullio.jenkins.plugins.multibranch;
 
 import jenkins.scm.api.SCMHead;
 
-public class BranchNameMapperImpl implements BranchNameMapper {
+final class BranchNameMapperImpl implements BranchNameMapper {
 
 	@Override
 	public SCMHead getBranch(final String projectName) {

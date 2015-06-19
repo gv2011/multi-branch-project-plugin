@@ -892,11 +892,11 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 		LOGGER.info("Principal: "+authentication.getPrincipal());
 		LOGGER.info("Thread: "+Thread.currentThread().getName());
 
-//		final SyncBranchesTrigger<?> syncBranchesTrigger = getSyncBranchesTrigger();
+		final SyncBranchesTrigger<?> syncBranchesTrigger = getSyncBranchesTrigger();
 //		new Thread(getName()+"-sync-branches"){
 //			@Override
 //			public void run() {
-//				syncBranchesTrigger.run();
+		syncBranchesTrigger.run();
 //			}			
 //		}.start();
 	}
@@ -970,46 +970,45 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	 * its exceptions to the listener.
 	 */
 	public void syncBranches(final TaskListener listener) {
-		final Authentication authentication = Jenkins.getAuthentication();
-		LOGGER.info("Principal: "+authentication.getPrincipal());
-		LOGGER.info("Thread: "+Thread.currentThread().getName());
-		boolean startSync;
+//		boolean startSync;
 		if (isDisabled()) {
 			listener.getLogger().println("Project disabled.");
-			startSync = false;
+//			startSync = false;
 		}
 		else{
-			synchronized(this){
-				//Ensure there is only one active sync thread at any time.
-				//If there is a new request while a sync is in progress, 
-				//do the sync again after it has finished.
-				if(syncInProgress){
-					startSync = false;
-					repeatSync = true;
-				}else{
-					startSync = true;
-					repeatSync = false;
-					syncInProgress = true;
-				}
-			}
-		}
-		while(startSync){
-			try {
-				getStaticWiring().getSynchronizer().synchronizeBranches(scmSource, templateProject, listener);
-			} catch (final Throwable e) {
-				e.printStackTrace(listener.fatalError(e.getMessage()));
-			} finally{
-				synchronized(this){
-					if(repeatSync){
-						repeatSync = false;
-						startSync = true;
-						syncInProgress = true;
-					}else{
-						syncInProgress = false;
-						startSync = false;
-					}
-				}
-			}
+			getStaticWiring().getSynchronizer().synchronizeBranches(scmSource, templateProject, listener);
+//			synchronized(this){
+//				//Ensure there is only one active sync thread at any time.
+//				//If there is a new request while a sync is in progress, 
+//				//do the sync again after it has finished.
+//				if(syncInProgress){
+//					startSync = false;
+//					repeatSync = true;
+//				}else{
+//					startSync = true;
+//					repeatSync = false;
+//					syncInProgress = true;
+//				}
+//			}
+//		}
+//		while(startSync){
+//			try {
+//				final Future<Void> f = getStaticWiring().getSynchronizer().synchronizeBranches(scmSource, templateProject, listener);
+//				f.get();
+//			} catch (final Throwable e) {
+//				e.printStackTrace(listener.fatalError(e.getMessage()));
+//			} finally{
+//				synchronized(this){
+//					if(repeatSync){
+//						repeatSync = false;
+//						startSync = true;
+//						syncInProgress = true;
+//					}else{
+//						syncInProgress = false;
+//						startSync = false;
+//					}
+//				}
+//			}
 		}
 	}
 

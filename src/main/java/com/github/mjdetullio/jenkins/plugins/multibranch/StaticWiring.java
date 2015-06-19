@@ -7,6 +7,7 @@ import hudson.model.ItemGroup;
 
 import java.util.Date;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nullable;
@@ -14,10 +15,11 @@ import javax.annotation.Nullable;
 import jenkins.model.Jenkins;
 import jenkins.scm.api.SCMHead;
 import jenkins.scm.api.SCMSourceCriteria;
+import jenkins.util.Timer;
 
 import com.google.common.base.Function;
 
-class StaticWiring<P extends AbstractProject<P,R>,R extends AbstractBuild<P,R>>{
+final class StaticWiring<P extends AbstractProject<P,R>,R extends AbstractBuild<P,R>>{
 	
 	private final BranchNameMapper mapper;
 	private final Function<Iterable<? extends SCMHead>, Set<SCMHead>> branchesFilter;
@@ -28,15 +30,15 @@ class StaticWiring<P extends AbstractProject<P,R>,R extends AbstractBuild<P,R>>{
 	private final Function<SCMHead, Date> branchAgeSupplier;
 	@SuppressWarnings("unused")
 	private final ItemGroup<? extends Item> parentProject;
-	@SuppressWarnings("unused")
-	private final Jenkins jenkins;
+	private final Runnable jenkinsUpdate;
 	private final SCMSourceCriteria listeningBranchPreseletor;
+	private final ExecutorService jenkinsExecutor;
 	
 	StaticWiring(final ProjectFactory<P> projectFactory, final ItemGroup<? extends Item> parentProject, final Jenkins jenkins) {
 		super();
 		this.projectFactory = projectFactory;
 		this.parentProject = parentProject;
-		this.jenkins = jenkins;
+		this.jenkinsUpdate = new JenkinsUpdate(jenkins);
 		this.mapper = new BranchNameMapperImpl();
 		this.subProjectRegistry = new SubProjectRegistry<P,R>(mapper);
 		this.branchAgeSupplier = new Function<SCMHead, Date>(){
@@ -45,9 +47,14 @@ class StaticWiring<P extends AbstractProject<P,R>,R extends AbstractBuild<P,R>>{
 				return getSubProjectRegistry().lastChange(branch);
 			}};
 		this.branchesFilter = new AgeBranchesFilter(branchAgeSupplier, 12, 50, TimeUnit.HOURS.toMillis(24));
+		this.jenkinsExecutor = Timer.get();
 		this.branchesSynchronizer = new BranchesSynchronizer<>(
-				parentProject, subProjectRegistry, branchesFilter, mapper, projectFactory,  jenkins);
+				parentProject, subProjectRegistry, branchesFilter, mapper, projectFactory,  jenkinsUpdate, jenkinsExecutor);
 		this.listeningBranchPreseletor = new ListeningBranchPreselector(mapper, TimeUnit.DAYS.toMillis(7), subProjectRegistry);
+	}
+
+	final ExecutorService getJenkinsExecutor() {
+		return jenkinsExecutor;
 	}
 
 	SubProjectRegistry<P, R> getSubProjectRegistry() {

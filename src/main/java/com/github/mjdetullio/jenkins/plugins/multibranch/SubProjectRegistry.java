@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import jenkins.scm.api.SCMHead;
 import edu.umd.cs.findbugs.annotations.CheckForNull;
 
-class SubProjectRegistry<P extends AbstractItem,B>
+final class SubProjectRegistry<P extends AbstractItem,B>
 implements BranchAgeListener{
 	
 	private final Object lock = new Object();

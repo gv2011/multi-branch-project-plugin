@@ -9,7 +9,7 @@ import jenkins.scm.api.SCMHead;
 import jenkins.scm.api.SCMSourceCriteria;
 
 @SuppressWarnings("serial")
-class ListeningBranchPreselector implements SCMSourceCriteria{
+final class ListeningBranchPreselector implements SCMSourceCriteria{
 
 	private final BranchNameMapper branchNameMapper;
 	private final Long maxAge;
@@ -17,7 +17,7 @@ class ListeningBranchPreselector implements SCMSourceCriteria{
 	
 	
 	
-	public ListeningBranchPreselector(
+	ListeningBranchPreselector(
 			final BranchNameMapper branchNameMapper,
 			final Long maxAge,
 			final BranchAgeListener branchAgeListener

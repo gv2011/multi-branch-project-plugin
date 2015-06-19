@@ -14,7 +14,7 @@ import jenkins.scm.api.SCMHead;
 
 import com.google.common.base.Function;
 
-public class AgeBranchesFilter implements Function<Iterable<? extends SCMHead>, Set<SCMHead>>{
+final class AgeBranchesFilter implements Function<Iterable<? extends SCMHead>, Set<SCMHead>>{
 	
 	private final Function<SCMHead, Date> lastChangeSupplier;
 
