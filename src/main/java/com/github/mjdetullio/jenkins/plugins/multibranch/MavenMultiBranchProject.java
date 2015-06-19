@@ -43,8 +43,9 @@ import org.kohsuke.stapler.QueryParameter;
 /**
  * @author Matthew DeTullio
  */
-public class MavenMultiBranchProject extends
-		AbstractMultiBranchProject<MavenModuleSet, MavenModuleSetBuild> {
+public class MavenMultiBranchProject 
+	extends AbstractMultiBranchProject<MavenModuleSet, MavenModuleSetBuild> 
+	implements ProjectFactory<MavenModuleSet, MavenModuleSetBuild>{
 
 	private static final String CLASSNAME = MavenMultiBranchProject.class.getName();
 	@SuppressWarnings("unused")
@@ -70,10 +71,14 @@ public class MavenMultiBranchProject extends
 		return MavenModuleSet.class;
 	}
 
+	@Override
+	protected ProjectFactory<MavenModuleSet, MavenModuleSetBuild> getProjectFactory() {
+		return this;
+	}
 
 
 	@Override
-	protected MavenModuleSet createNewSubProject(final String branchName) {
+	public MavenModuleSet createNewSubProject(final String branchName) {
 		return new MavenModuleSet(this, branchName);
 	}
 

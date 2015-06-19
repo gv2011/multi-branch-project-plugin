@@ -37,8 +37,9 @@ import jenkins.model.Jenkins;
 /**
  * @author Matthew DeTullio
  */
-public class FreeStyleMultiBranchProject extends AbstractMultiBranchProject
-		<FreeStyleProject, FreeStyleBuild> {
+public class FreeStyleMultiBranchProject 
+	extends AbstractMultiBranchProject<FreeStyleProject, FreeStyleBuild> 
+	implements ProjectFactory<FreeStyleProject, FreeStyleBuild>{
 
 	/**
 	 * Constructor that specifies the {@link ItemGroup} for this project and the
@@ -61,9 +62,18 @@ public class FreeStyleMultiBranchProject extends AbstractMultiBranchProject
 
 
 	@Override
-	protected FreeStyleProject createNewSubProject(final String branchName) {
+	public FreeStyleProject createNewSubProject(final String branchName) {
 		return new FreeStyleProject(this, branchName);
 	}
+	
+	
+
+	@Override
+	protected ProjectFactory<FreeStyleProject, FreeStyleBuild> getProjectFactory() {
+		return this;
+	}
+
+
 
 	/**
 	 * {@inheritDoc}
