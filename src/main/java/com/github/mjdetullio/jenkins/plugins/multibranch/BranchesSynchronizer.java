@@ -6,6 +6,7 @@ import hudson.model.AbstractProject;
 import hudson.model.Item;
 import hudson.model.ItemGroup;
 import hudson.model.TaskListener;
+import hudson.security.ACL;
 import hudson.triggers.SCMTrigger;
 
 import java.io.IOException;
@@ -24,6 +25,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import jenkins.model.Jenkins;
 import jenkins.scm.api.SCMHead;
 import jenkins.scm.api.SCMSource;
+
+import org.acegisecurity.context.SecurityContext;
+import org.acegisecurity.context.SecurityContextHolder;
 
 import com.google.common.base.Function;
 
@@ -62,7 +66,14 @@ Future<Void> synchronizeBranches(final SCMSource scmSource, final P templateProj
 		@Override
 		public Void call() throws Exception {
 			if(syncInProgress.compareAndSet(false, true)){
-				try{doSynchronizeBranches(scmSource, templateProject, listener);}
+				try{
+			        final SecurityContext oldContext = ACL.impersonate(ACL.SYSTEM);
+			        try {
+			        	doSynchronizeBranches(scmSource, templateProject, listener);
+			        } finally {
+			            SecurityContextHolder.setContext(oldContext);
+			        }
+				}
 				finally{syncInProgress.set(false);}
 			}else{
 				listener.getLogger().println("Skipping this synchronization run because there is still one active.");
