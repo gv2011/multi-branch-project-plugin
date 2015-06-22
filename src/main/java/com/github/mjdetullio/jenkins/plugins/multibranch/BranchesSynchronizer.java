@@ -120,20 +120,7 @@ private void doSynchronizeBranches(final SCMSource scmSource, final P templatePr
 		}
 	}
 
-	// Delete all the sub-projects for branches that no longer exist
-	final Iterator<P> subProjects = subProjectRegistry.getProjects().iterator();
-	while (subProjects.hasNext()) {
-		final P project = subProjects.next();
-		final String projectName = project.getName();
-		if (!branchesByProjectName.containsKey(projectName)) {
-			log.println("Deleting project " + projectName);
-			try {
-				subProjectRegistry.deleteProject(projectName);
-			} catch (final Throwable e) {
-				e.printStackTrace(listener.fatalError(e.getMessage()));
-			}
-		}
-	}
+	deleteProjects(listener, branchesByProjectName);
 
 	// Sync config for existing branch projects
 	final XmlFile configFile = templateProject.getConfigFile();
@@ -184,6 +171,27 @@ private void doSynchronizeBranches(final SCMSource scmSource, final P templatePr
 					new SCMTrigger.SCMTriggerCause("New branch detected."));
 		} catch (final Throwable e) {
 			e.printStackTrace(listener.fatalError(e.getMessage()));
+		}
+	}
+}
+
+
+/**
+ * Delete all the sub-projects for branches that no longer exist
+ */
+private void deleteProjects(final TaskListener listener, final Map<String, SCMHead> branchesByProjectName) {
+	final PrintStream log = listener.getLogger();
+	final Iterator<P> subProjects = subProjectRegistry.getProjects().iterator();
+	while (subProjects.hasNext()) {
+		final P project = subProjects.next();
+		final String projectName = project.getName();
+		if (!branchesByProjectName.containsKey(projectName)) {
+			log.println("Deleting project " + projectName);
+			try {
+				subProjectRegistry.deleteProject(projectName);
+			} catch (final Throwable e) {
+				e.printStackTrace(listener.fatalError(e.getMessage()));
+			}
 		}
 	}
 }
