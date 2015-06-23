@@ -40,7 +40,7 @@ import com.google.common.collect.Sets;
 /**
  * Factores out the synchromnization logic from AbstractMultiBranchProject.
  */
-final class BranchesSynchronizerImpl<P extends AbstractProject<P,R>,R extends AbstractBuild<P,R>>
+public final class BranchesSynchronizerImpl<P extends AbstractProject<P,R>,R extends AbstractBuild<P,R>>
 implements BranchesSynchronizer<P>{
 	
 private static Logger LOG = LoggerFactory.getLogger(BranchesSynchronizerImpl.class);
@@ -71,10 +71,12 @@ BranchesSynchronizerImpl(
 
 @Override
 public Future<Void> synchronizeBranches(final SCMSource scmSource, final P templateProject, final TaskListener listener){
+	LOG.debug("Adding synchronizeBranches task.");
 	return executor.submit(new Callable<Void>(){
 		@Override
 		public Void call() throws Exception {
 			if(syncInProgress.compareAndSet(false, true)){
+				LOG.debug("Starting synchronization run.");
 				try{
 			        final SecurityContext oldContext = ACL.impersonate(ACL.SYSTEM);
 			        try {
@@ -87,8 +89,12 @@ public Future<Void> synchronizeBranches(final SCMSource scmSource, final P templ
 			            SecurityContextHolder.setContext(oldContext);
 			        }
 				}
-				finally{syncInProgress.set(false);}
+				finally{
+					syncInProgress.set(false);
+					LOG.debug("Finished synchronization run.");
+					}
 			}else{
+				LOG.warn("Skipped synchronization run (still active).");
 				listener.getLogger().println("Skipping this synchronization run because there is still one active.");
 			}
 			return null;
