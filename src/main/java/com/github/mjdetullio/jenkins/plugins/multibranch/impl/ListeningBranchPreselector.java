@@ -1,4 +1,4 @@
-package com.github.mjdetullio.jenkins.plugins.multibranch;
+package com.github.mjdetullio.jenkins.plugins.multibranch.impl;
 
 import hudson.model.TaskListener;
 
@@ -8,13 +8,16 @@ import java.util.Date;
 import jenkins.scm.api.SCMHead;
 import jenkins.scm.api.SCMSourceCriteria;
 
+import com.github.mjdetullio.jenkins.plugins.multibranch.BranchAgeListener;
+import com.github.mjdetullio.jenkins.plugins.multibranch.BranchId;
+import com.github.mjdetullio.jenkins.plugins.multibranch.BranchNameMapper;
+
 @SuppressWarnings("serial")
 final class ListeningBranchPreselector implements SCMSourceCriteria{
 
 	private final BranchNameMapper branchNameMapper;
 	private final Long maxAge;
 	BranchAgeListener branchAgeListener;
-	
 	
 	
 	ListeningBranchPreselector(
@@ -43,18 +46,19 @@ final class ListeningBranchPreselector implements SCMSourceCriteria{
 				listener.error("Null branch name.");
 				accepted = false;
 			}else{
-				final SCMHead branch = new SCMHead(name);
-				if(!branchNameMapper.branchNameSupported(branch)){
-					listener.error("The branch name "+branch+" is not supported.");
+				final SCMHead scmHead = new SCMHead(name);
+				if(!branchNameMapper.branchNameSupported(scmHead)){
+					listener.error("The branch name "+scmHead+" is not supported.");
 					accepted = false;
 				}else{
+					final BranchId branch = branchNameMapper.fromSCMHead(scmHead);
 					final Date lastChange = new Date(probe.lastModified());
 					if(maxAge==null) accepted = true;
 					else{
 						final long age = System.currentTimeMillis()-lastChange.getTime();
 						accepted = age <= maxAge.longValue();
 						if(!accepted) listener.getLogger().println(
-								"Branch "+branch+" is too old (last change at "+lastChange+").");
+								"Branch "+scmHead+" is too old (last change at "+lastChange+").");
 					}
 					if(accepted) branchAgeListener.registerLastChange(branch, lastChange);
 				}

@@ -1,0 +1,1 @@
+package com.github.mjdetullio.jenkins.plugins.multibranch.impl;

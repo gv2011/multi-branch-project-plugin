@@ -1,4 +1,4 @@
-package com.github.mjdetullio.jenkins.plugins.multibranch;
+package com.github.mjdetullio.jenkins.plugins.multibranch.impl;
 
 import jenkins.model.Jenkins;
 

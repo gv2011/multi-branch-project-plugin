@@ -23,6 +23,7 @@
  */
 package com.github.mjdetullio.jenkins.plugins.multibranch;
 
+import static com.github.mjdetullio.jenkins.plugins.multibranch.util.FormattingUtils.format;
 import static javax.servlet.http.HttpServletResponse.SC_BAD_REQUEST;
 import hudson.Extension;
 import hudson.Util;
@@ -36,7 +37,6 @@ import hudson.model.Descriptor;
 import hudson.model.HealthReport;
 import hudson.model.Item;
 import hudson.model.ItemGroup;
-import hudson.model.Items;
 import hudson.model.JobProperty;
 import hudson.model.JobPropertyDescriptor;
 import hudson.model.Result;
@@ -61,7 +61,6 @@ import hudson.views.ViewsTabBar;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileFilter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -75,9 +74,9 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.util.concurrent.TimeUnit;
 
+import javax.annotation.Nullable;
 import javax.servlet.ServletException;
 
 import jenkins.model.Jenkins;
@@ -90,17 +89,19 @@ import jenkins.scm.impl.SingleSCMSource;
 import net.sf.json.JSONException;
 import net.sf.json.JSONObject;
 
-import org.acegisecurity.Authentication;
 import org.apache.commons.io.FileUtils;
 import org.kohsuke.stapler.QueryParameter;
 import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.StaplerResponse;
 import org.kohsuke.stapler.export.Exported;
 import org.kohsuke.stapler.interceptor.RequirePOST;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import antlr.ANTLRException;
 
-import com.google.common.collect.ImmutableMap;
+import com.github.mjdetullio.jenkins.plugins.multibranch.impl.StaticWiring;
+import com.google.common.base.Function;
 
 import edu.umd.cs.findbugs.annotations.CheckForNull;
 import edu.umd.cs.findbugs.annotations.NonNull;
@@ -112,11 +113,12 @@ public abstract class AbstractMultiBranchProject<P extends AbstractProject<P, B>
 extends AbstractProject<P, B>
 implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	
-	private static final String CLASSNAME = AbstractMultiBranchProject.class.getName();
-	private static final Logger LOGGER = Logger.getLogger(CLASSNAME);
+	private static final Logger LOG = LoggerFactory.getLogger(AbstractMultiBranchProject.class);
 
 	static final String TEMPLATE = "template";
 	private static final String DEFAULT_SYNC_SPEC = "H/5 * * * *";
+
+	private static final Long MAX_AGE = TimeUnit.DAYS.toMillis(7);
 	
 	//Saved state:
 	private volatile boolean allowAnonymousSync;
@@ -130,10 +132,9 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	
 	
 	//Dependent variables:
-	private transient volatile P templateProject;
 	private transient SCMSource scmSourceCache;
 	
-	private transient volatile StaticWiring<P,B> staticWiring;
+	private transient volatile StaticWiring<ItemGroup<P>, P,B> staticWiring;
 
 	private transient volatile ViewGroupMixIn viewGroupMixIn;
 	private transient volatile ViewsTabBar viewsTabBar;
@@ -151,8 +152,14 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	 */
 	public AbstractMultiBranchProject(final ItemGroup<?> parent, final String name) {
 		super(parent, name);
-		init();
+		try {
+			init();
+		} catch (final IOException e) {
+			throw new RuntimeException(e);
+		}
 	}
+	
+	protected abstract P createNewSubProject(final String branchName);
 	
 	protected synchronized final String name(){
 		final String name = this.name;
@@ -167,7 +174,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	public void onLoad(final ItemGroup<? extends Item> parent, final String name)
 			throws IOException {
 		super.onLoad(parent, name);
-		runBranchProjectMigration();
+		new BranchProjectMigrator(getFullName(), getTemplateDir(), getBranchesDir(), isDisabled()).run();
 		init();
 	}
 	
@@ -178,120 +185,14 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 		return viewsx;
 	}
 
-	private void runBranchProjectMigration() {
-//		if (disabledSubProjects == null) {
-//			disabledSubProjects = new PersistedList<String>(this);
-//		}
-
-		final List<File> subProjects = new ArrayList<File>();
-		subProjects.add(getTemplateDir());
-
-		final File[] files = getBranchesDir().listFiles();
-		if (files != null) {
-			subProjects.addAll(Arrays.asList(files));
-		}
-
-		for (final File subProjectDir : subProjects) {
-			final File configFile = new File(subProjectDir, "config.xml");
-
-			if (!subProjectDir.isDirectory() || !configFile.exists()
-					|| !configFile.isFile()) {
-				continue;
-			}
-
-			try {
-				String xml = FileUtils.readFileToString(configFile);
-
-				xml = xml.replaceFirst(
-						"(?m)^<(freestyle-branch-project|com\\.github\\.mjdetullio\\.jenkins\\.plugins\\.multibranch\\.FreeStyleBranchProject)( plugin=\".*?\")?>$",
-						"<project>");
-				xml = xml.replaceFirst(
-						"(?m)^</(freestyle-branch-project|com\\.github\\.mjdetullio\\.jenkins\\.plugins\\.multibranch\\.FreeStyleBranchProject)>$",
-						"</project>");
-				xml = xml.replaceFirst(
-						"(?m)^  <template>(true|false)</template>(\r?\n)", "");
-
-				/*
-				 * Previously, sub-projects would reference the parent to see if
-				 * they were disabled.  Now the parent must track each
-				 * sub-project to see if it should stay disabled when the parent
-				 * is re-enabled.
-				 *
-				 * If disabled, this needs to be propagated down to the
-				 * sub-projects.
-				 */
-				if (isDisabled()) {
-					if (!subProjectDir.equals(getTemplateDir()) && xml.matches(
-							"(?ms).+(\r?\n)  <disabled>true</disabled>(\r?\n).+")) {
-//						disabledSubProjects.add(
-//								rawDecode(subProjectDir.getName()));
-					}
-
-					xml = xml.replaceFirst(
-							"(?m)^  <disabled>false</disabled>$",
-							"  <disabled>true</disabled>");
-				}
-
-				FileUtils.writeStringToFile(configFile, xml);
-			} catch (final IOException e) {
-				LOGGER.log(Level.WARNING, "Unable to migrate " + configFile, e);
-			}
-
-			final String branchFullName =
-					getFullName() + '/' + subProjectDir.getName();
-
-			// Replacement mirrors jenkins.model.Jenkins#expandVariablesForDirectory
-			final File[] builds = new File(Util.replaceMacro(
-					Jenkins.getInstance().getRawBuildsDir(),
-					ImmutableMap.of(
-							"JENKINS_HOME",
-							Jenkins.getInstance().getRootDir().getPath(),
-							"ITEM_ROOTDIR", subProjectDir.getPath(),
-							"ITEM_FULLNAME", branchFullName,
-							"ITEM_FULL_NAME", branchFullName.replace(':', '$')
-					))).listFiles();
-
-			if (builds == null) {
-				continue;
-			}
-
-			for (final File buildDir : builds) {
-				final File buildFile = new File(buildDir, "build.xml");
-
-				if (!buildDir.isDirectory() || !buildFile.exists()
-						|| !buildFile.isFile()) {
-					continue;
-				}
-
-				try {
-					String xml = FileUtils.readFileToString(buildFile);
-
-					xml = xml.replaceFirst(
-							"(?m)^<(freestyle-branch-build|com\\.github\\.mjdetullio\\.jenkins\\.plugins\\.multibranch\\.FreeStyleBranchBuild)( plugin=\".*?\")?>$",
-							"<build>");
-					xml = xml.replaceFirst(
-							"(?m)^</(freestyle-branch-build|com\\.github\\.mjdetullio\\.jenkins\\.plugins\\.multibranch\\.FreeStyleBranchBuild)>$",
-							"</build>");
-					xml = xml.replaceAll(
-							" class=\"(freestyle-branch-build|com\\.github\\.mjdetullio\\.jenkins\\.plugins\\.multibranch\\.FreeStyleBranchBuild)\"",
-							" class=\"build\"");
-
-					FileUtils.writeStringToFile(buildFile, xml);
-				} catch (final IOException e) {
-					LOGGER.log(Level.WARNING, "Unable to migrate " + buildFile,
-							e);
-				}
-			}
-		}
-	}
-
 	/**
 	 * Common initialization that is invoked when either a new project is
 	 * created with the constructor {@link AbstractMultiBranchProject
 	 * (ItemGroup, String)} or when a project is loaded from disk with {@link
 	 * #onLoad(ItemGroup, String)}.
+	 * @throws IOException 
 	 */
-	protected void init() {
+	protected void init() throws IOException {
 //		if (disabledSubProjects == null) {
 //			disabledSubProjects = new PersistedList<String>(this);
 //		}
@@ -304,8 +205,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 			try {
 				listView.save();
 			} catch (final IOException e) {
-				LOGGER.log(Level.WARNING,
-						"Failed to save initial multi-branch project view", e);
+				LOG.warn("Failed to save initial multi-branch project view", e);
 			}
 		}
 		if (primaryView == null) {
@@ -329,68 +229,59 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 			}
 		};
 
-		try {
-			P templateProject;
-			if (!(new File(getTemplateDir(), "config.xml").isFile())) {
-				templateProject = getProjectFactory().createNewSubProject(TEMPLATE);
-			} else {
-				//noinspection unchecked
-				templateProject = projectClass().cast(Items.load(this, getTemplateDir()));
-			}
-
-			// Prevent tampering
-			if (!(templateProject.getScm() instanceof NullSCM)) {
-				templateProject.setScm(new NullSCM());
-			}
-			templateProject.disable();
-			this.templateProject = templateProject;
-		} catch (final IOException e) {
-			LOGGER.log(Level.WARNING,
-					"Failed to load template project " + getTemplateDir(), e);
-		}
+		getStaticWiring().getSubProjectRegistry().getTemplateProject();
 		
-		if (getBranchesDir().isDirectory()) {
-			for (final File branch : getBranchesDir().listFiles(new FileFilter() {
-				@Override
-				public boolean accept(final File pathname) {
-					return pathname.isDirectory() && new File(pathname,
-							"config.xml").isFile();
-				}
-			})) {
-				try {
-					final Item item = (Item) Items.getConfigFile(branch).read();
-					item.onLoad(this, rawDecode(branch.getName()));
-
-					//noinspection unchecked
-					final P project = projectClass().cast(item);
-					
-					getSubProjects().addProject(project);
-
-					// Handle offline tampering of disabled setting
-					if (isDisabled() && !project.isDisabled()) {
-						project.disable();
-					}
-				} catch (final IOException e) {
-					LOGGER.log(Level.WARNING,
-							"Failed to load branch project " + branch, e);
-				}
-			}
-		}
+//		try {
+//			P templateProject;
+//			if (!(new File(getTemplateDir(), "config.xml").isFile())) {
+//				templateProject = getProjectFactory().apply(TEMPLATE);
+//			} else {
+//				//noinspection unchecked
+//				templateProject = projectClass().cast(Items.load(this, getTemplateDir()));
+//			}
+//
+//			// Prevent tampering
+//			if (!(templateProject.getScm() instanceof NullSCM)) {
+//				templateProject.setScm(new NullSCM());
+//			}
+//			templateProject.disable();
+//			this.templateProject = templateProject;
+//		} catch (final IOException e) {
+//			LOGGER.log(Level.WARNING,
+//					"Failed to load template project " + getTemplateDir(), e);
+//		}
+//		
+//		if (getBranchesDir().isDirectory()) {
+//			for (final File subProjectDir : getBranchesDir().listFiles(new FileFilter() {
+//				@Override
+//				public boolean accept(final File pathname) {
+//					return pathname.isDirectory() && new File(pathname,
+//							"config.xml").isFile();
+//				}
+//			})) {
+//				try {
+//					final Item item = (Item) Items.getConfigFile(subProjectDir).read();
+//					item.onLoad(this, rawDecode(subProjectDir.getName()));
+//
+//					final P project = projectClass().cast(item);
+//					
+//					getSubProjects().addExistingProject(project);
+//
+//					// Handle offline tampering of disabled setting
+//					if (isDisabled() && !project.isDisabled()) {
+//						project.disable();
+//					}
+//				} catch (final IOException e) {
+//					LOGGER.log(Level.WARNING,
+//							"Failed to load branch project " + subProjectDir, e);
+//				}
+//			}
+//		}
 
 		// Will check triggers(), add & start default sync cron if not there
 		getSyncBranchesTrigger();
 	}
 
-
-	/**
-	 * Defines how sub-projects should be created when provided the parent and
-	 * the branch name.
-	 *
-	 * @param parent     - this
-	 * @param branchName - branch name
-	 * @return new sub-project of type {@link P}
-	 */
-	protected abstract ProjectFactory<P> getProjectFactory();
 
 	/**
 	 * Stapler URL binding for ${rootUrl}/job/${project}/branch/${branchProject}
@@ -404,11 +295,10 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 
 	/**
 	 * Retrieves the template sub-project.  Used by configure-entries.jelly.
+	 * @throws IOException 
 	 */
 	public P getTemplate() {
-		final P result = this.templateProject;
-		if(result==null) throw new IllegalStateException("No template project available.");
-		return result;
+		return getStaticWiring().getSubProjectRegistry().getTemplateProject().delegate();
 	}
 
 
@@ -421,8 +311,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	public File getBranchesDir() {
 		final File dir = new File(getRootDir(), "branches");
 		if (!dir.isDirectory() && !dir.mkdirs()) {
-			LOGGER.log(Level.WARNING,
-					"Could not create branches directory {0}", dir);
+			LOG.warn(format("Could not create branches directory {}.", dir));
 		}
 		return dir;
 	}
@@ -444,7 +333,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	 */
 	@Override
 	public synchronized Collection<P> getItems() {
-		return getSubProjects().getProjects();
+		return getStaticWiring().getSubProjectRegistry().getDelegates();
 	}
 
 	/**
@@ -453,19 +342,32 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	@Override
 	@CheckForNull
 	public synchronized P getItem(final String name) {
-		return getSubProjects().getProject(name);
+		final StaticWiring<ItemGroup<P>, P, B> w = getStaticWiring();
+		final BranchId branch = w.getBranchNameMapper().fromProjectName(name);
+		return w.getSubProjectRegistry().getProject(branch ).delegate();
 	}
 	
-	private SubProjectRegistry<P,B> getSubProjects(){
-		return getStaticWiring().getSubProjectRegistry();
-	}
-	
-	private StaticWiring<P,B> getStaticWiring(){
-		StaticWiring<P,B> result = staticWiring;
+	private StaticWiring<ItemGroup<P>, P, B> getStaticWiring(){
+		StaticWiring<ItemGroup<P>, P, B> result = staticWiring;
 		if(result==null){
 			synchronized(this){
 				if(staticWiring==null){
-					staticWiring = new StaticWiring<P,B>(getProjectFactory(), this, Jenkins.getInstance());	
+				    final Function<String,P> subProjectFactory = new Function<String,P>(){
+						@Override
+						public P apply(@Nullable final String name) {
+							return createNewSubProject(name);
+						}
+				    };
+				    staticWiring = new StaticWiring<ItemGroup<P>,P,B>(
+							projectClass(),
+							this, 
+							getRootDir().toPath(),
+							getBranchesDir().toPath(),
+							getTemplateDir().toPath(),
+						    TEMPLATE,
+						    subProjectFactory,
+						    MAX_AGE
+							);	
 				}
 				result = staticWiring;
 			}
@@ -480,9 +382,15 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	 */
 	@Override
 	public synchronized void onDeleted(final P subProject) throws IOException {
-		getSubProjects().onDeleted(subProject);
+		final StaticWiring<ItemGroup<P>, P, B> w = getStaticWiring();
+		final BranchId branch = w.getBranchNameMapper().fromProjectName(subProject.getName());
+		try {
+			w.getSubProjectRegistry().delete(branch);
+		} catch (final InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 	}
-
 
 	
 	/**
@@ -499,13 +407,19 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	 */
 	@Override
 	public File getRootDirFor(final P child) {
-		// Null SCM should be the template
-		if (child.getScm() == null || child.getScm() instanceof NullSCM) {
-			return getTemplateDir();
+		File subProjectDir;
+		if (isTemplateSubProject(child)) {
+			subProjectDir = getTemplateDir();
 		}
+		else{// All others are branches
+			subProjectDir = new File(getBranchesDir(), Util.rawEncode(child.getName()));
+		}
+		return subProjectDir;
+	}
 
-		// All others are branches
-		return new File(getBranchesDir(), Util.rawEncode(child.getName()));
+	private boolean isTemplateSubProject(final P child) {
+		// Null SCM should be the template
+		return child.getScm() == null || child.getScm() instanceof NullSCM;
 	}
 
 	/**
@@ -828,8 +742,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 					f.setAccessible(true);
 					f.set(p, this);
 				} catch (final Throwable e) {
-					LOGGER.log(Level.WARNING,
-							"Unable to set job property owner", e);
+					LOG.warn("Unable to set job property owner", e);
 				}
 				// End hack
 				//noinspection unchecked
@@ -909,10 +822,6 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 		Jenkins.getInstance().rebuildDependencyGraphAsync();
 		//endregion AbstractProject mirror
 		
-		final Authentication authentication = Jenkins.getAuthentication();
-		LOGGER.info("Principal: "+authentication.getPrincipal());
-		LOGGER.info("Thread: "+Thread.currentThread().getName());
-
 		final SyncBranchesTrigger<?> syncBranchesTrigger = getSyncBranchesTrigger();
 //		new Thread(getName()+"-sync-branches"){
 //			@Override
@@ -975,11 +884,9 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 			try {
 				restartSyncBranchesTrigger(spec);
 			} catch (final IOException e) {
-				LOGGER.log(Level.WARNING,
-						"Failed to add trigger SyncBranchesTrigger", e);
+				LOG.warn("Failed to add trigger SyncBranchesTrigger", e);
 			} catch (final ANTLRException e) {
-				LOGGER.log(Level.WARNING,
-						"Failed to instantiate SyncBranchesTrigger", e);
+				LOG.warn("Failed to instantiate SyncBranchesTrigger", e);
 			}
 		}
 
@@ -990,15 +897,16 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	 * Synchronizes the available sub-projects by checking if the project is
 	 * disabled, then calling {@link #_syncBranches(TaskListener)} and logging
 	 * its exceptions to the listener.
+	 * @throws IOException 
 	 */
-	public void syncBranches(final TaskListener listener) {
+	public void syncBranches(final TaskListener listener) throws IOException {
 //		boolean startSync;
 		if (isDisabled()) {
 			listener.getLogger().println("Project disabled.");
 //			startSync = false;
 		}
 		else{
-			getStaticWiring().getSynchronizer().synchronizeBranches(getSCMSource(), templateProject, listener);
+			getStaticWiring().getSynchronizer().synchronizeBranches(getSCMSource(), getTemplate(), listener);
 //			synchronized(this){
 //				//Ensure there is only one active sync thread at any time.
 //				//If there is a new request while a sync is in progress, 
@@ -1336,7 +1244,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 				try {
 					project.setScm(new NullSCM());
 				} catch (final IOException e) {
-					LOGGER.warning("Unable to correct project configuration.");
+					LOG.warn("Unable to correct project configuration.");
 				}
 			}
 		}
@@ -1356,7 +1264,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 						template.disable();
 					}
 				} catch (final IOException e) {
-					LOGGER.warning("Unable to correct template configuration.");
+					LOG.warn("Unable to correct template configuration.");
 				}
 
 				/*
@@ -1368,7 +1276,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 						FileUtils.deleteDirectory(
 								new File(parent.getBranchesDir(), TEMPLATE));
 					} catch (final IOException e) {
-						LOGGER.warning("Unable to delete rogue template dir.");
+						LOG.warn("Unable to delete rogue template dir.");
 					}
 				}
 			}
@@ -1379,7 +1287,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 				try {
 					project.disable();
 				} catch (final IOException e) {
-					LOGGER.warning("Unable to keep sub-project disabled.");
+					LOG.warn("Unable to keep sub-project disabled.");
 				}
 			}
 		}

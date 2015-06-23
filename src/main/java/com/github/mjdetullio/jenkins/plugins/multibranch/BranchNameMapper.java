@@ -1,15 +1,21 @@
 package com.github.mjdetullio.jenkins.plugins.multibranch;
 
+import java.nio.file.Path;
+
 import jenkins.scm.api.SCMHead;
 
 public interface BranchNameMapper {
 	
-	SCMHead getBranch(String projectName);
+	BranchId fromProjectName(String projectName);
 
-	String getProjectName(SCMHead branch);
+	BranchId fromSCMHead(SCMHead branch);
+
+	BranchId fromDirectory(Path directory);
 
 	boolean projectNameSupported(String projectName);
 
 	boolean branchNameSupported(SCMHead branch);
+
+	boolean directorySupported(Path dir);
 
 }
