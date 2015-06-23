@@ -22,6 +22,8 @@ import jenkins.scm.api.SCMSource;
 
 import org.acegisecurity.context.SecurityContext;
 import org.acegisecurity.context.SecurityContextHolder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.github.mjdetullio.jenkins.plugins.multibranch.BranchId;
 import com.github.mjdetullio.jenkins.plugins.multibranch.BranchNameMapper;
@@ -40,6 +42,8 @@ import com.google.common.collect.Sets;
  */
 final class BranchesSynchronizerImpl<P extends AbstractProject<P,R>,R extends AbstractBuild<P,R>>
 implements BranchesSynchronizer<P>{
+	
+private static Logger LOG = LoggerFactory.getLogger(BranchesSynchronizerImpl.class);
 	
 private final ItemGroup<? extends Item> parentProject;
 private final SubProjectRepository<P> subProjectRegistry;
@@ -76,6 +80,7 @@ public Future<Void> synchronizeBranches(final SCMSource scmSource, final P templ
 			        try {
 			        	doSynchronizeBranches(scmSource, templateProject, listener);
 			        } catch(final Throwable t){
+			        	LOG.error("Error during branch synchronization.", t);
 			        	t.printStackTrace(listener.fatalError(t.getMessage()));
 			        	throw t;
 			        } finally {
