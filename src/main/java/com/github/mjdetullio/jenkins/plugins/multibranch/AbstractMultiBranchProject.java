@@ -24,6 +24,7 @@
 package com.github.mjdetullio.jenkins.plugins.multibranch;
 
 import static com.github.mjdetullio.jenkins.plugins.multibranch.util.FormattingUtils.format;
+import static com.google.common.base.Objects.equal;
 import static javax.servlet.http.HttpServletResponse.SC_BAD_REQUEST;
 import hudson.Extension;
 import hudson.Util;
@@ -103,8 +104,6 @@ import antlr.ANTLRException;
 import com.github.mjdetullio.jenkins.plugins.multibranch.impl.StaticWiring;
 import com.google.common.base.Function;
 
-import edu.umd.cs.findbugs.annotations.CheckForNull;
-import edu.umd.cs.findbugs.annotations.NonNull;
 
 /**
  * @author Matthew DeTullio
@@ -233,7 +232,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 			}
 		};
 
-		getStaticWiring().getSubProjectRegistry().getTemplateProject();
+		getStaticWiring().getSubProjectRepository().getTemplateProject();
 		
 //		try {
 //			P templateProject;
@@ -302,7 +301,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	 * @throws IOException 
 	 */
 	public P getTemplate() {
-		return getStaticWiring().getSubProjectRegistry().getTemplateProject().delegate();
+		return getStaticWiring().getSubProjectRepository().getTemplateProject().delegate();
 	}
 
 
@@ -337,18 +336,25 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	 */
 	@Override
 	public synchronized Collection<P> getItems() {
-		return getStaticWiring().getSubProjectRegistry().getDelegates();
+		return getStaticWiring().getSubProjectRepository().getDelegates();
 	}
 
 	/**
 	 * {@inheritDoc}
 	 */
 	@Override
-	@CheckForNull
+	@Nullable
 	public synchronized P getItem(final String name) {
 		final StaticWiring<ItemGroup<P>, P, B> w = getStaticWiring();
-		final BranchId branch = w.getBranchNameMapper().fromProjectName(name);
-		return w.getSubProjectRegistry().getProject(branch ).delegate();
+		final SubProjectRepository<P> repo = w.getSubProjectRepository();
+		final SubProject<P> project;
+		if(equal(name, TEMPLATE)) {
+			project = repo.getTemplateProject();
+		} else{
+			final BranchId branch = w.getBranchNameMapper().fromProjectName(name);
+			project = repo.getProject(branch);
+		}
+		return project==null?null:project.delegate();
 	}
 	
 	private StaticWiring<ItemGroup<P>, P, B> getStaticWiring(){
@@ -389,7 +395,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 		final StaticWiring<ItemGroup<P>, P, B> w = getStaticWiring();
 		final BranchId branch = w.getBranchNameMapper().fromProjectName(subProject.getName());
 		try {
-			w.getSubProjectRegistry().delete(branch);
+			w.getSubProjectRepository().delete(branch);
 		} catch (final InterruptedException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -521,7 +527,6 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	 * {@inheritDoc}
 	 */
 	@Override
-	@NonNull
 	public List<SCMSource> getSCMSources() {
 		final SCMSource scmSource = getSCMSource();
 		if (scmSource == null) {
@@ -534,8 +539,8 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	 * {@inheritDoc}
 	 */
 	@Override
-	@CheckForNull
-	public SCMSource getSCMSource(@CheckForNull final String sourceId) {
+	@Nullable
+	public SCMSource getSCMSource(@Nullable final String sourceId) {
 		final SCMSource scmSource = getSCMSource();
 		if (scmSource != null && scmSource.getId().equals(sourceId)) {
 			return scmSource;
@@ -547,7 +552,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	 * {@inheritDoc}
 	 */
 	@Override
-	public void onSCMSourceUpdated(@NonNull final SCMSource source) {
+	public void onSCMSourceUpdated(final SCMSource source) {
 		getSyncBranchesTrigger().run();
 	}
 
@@ -555,8 +560,8 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	 * {@inheritDoc}
 	 */
 	@Override
-	@CheckForNull
-	public SCMSourceCriteria getSCMSourceCriteria(@NonNull final SCMSource source) {
+	@Nullable
+	public SCMSourceCriteria getSCMSourceCriteria(final SCMSource source) {
 		return getStaticWiring().getListeningBranchPreseletor();
 	}
 
@@ -567,7 +572,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	 *
 	 * @return the project's only SCMSource (may be null)
 	 */
-	@CheckForNull
+	@Nullable
 	public synchronized SCMSource getSCMSource() {
 		final SCMSource scmSource = this.scmSource;
 		if(scmSourceCache!=scmSource){

@@ -6,6 +6,8 @@ import java.util.logging.Level;
 import java.util.logging.LogManager;
 import java.util.logging.Logger;
 
+import org.apache.juli.ClassLoaderLogManager;
+
 import com.github.mjdetullio.jenkins.plugins.multibranch.impl.BranchesSynchronizerImpl;
 
 public class Logging {
@@ -13,6 +15,7 @@ public class Logging {
 	private static final MyLogHandler handler = new MyLogHandler();
 
 	public static void tweak() {
+		final Class<ClassLoaderLogManager> c = ClassLoaderLogManager.class;
 		final Logger root = Logger.getLogger("");
 		root.addHandler(handler);
 		root.log(Level.SEVERE, "1");

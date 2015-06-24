@@ -1,5 +1,7 @@
 package com.github.mjdetullio.jenkins.plugins.multibranch.impl;
 
+import static com.github.mjdetullio.jenkins.plugins.multibranch.util.FormattingUtils.format;
+import static com.google.common.base.Objects.equal;
 import hudson.Util;
 
 import java.nio.file.Path;
@@ -12,15 +14,18 @@ import com.github.mjdetullio.jenkins.plugins.multibranch.BranchNameMapper;
 final class BranchNameMapperImpl implements BranchNameMapper {
 	
 	private final Path rootDirectory;
+	private final String templateProjectName;
 	
-	BranchNameMapperImpl(final Path rootDirectory) {
+	BranchNameMapperImpl(final Path rootDirectory, final String templateProjectName) {
 		this.rootDirectory = rootDirectory.toAbsolutePath().normalize();
+		this.templateProjectName = templateProjectName;
 	}
 	
 	
 	@Override
 	public BranchId fromProjectName(final String projectName) {
-		if(!projectNameSupported(projectName)) throw new IllegalArgumentException();
+		if(!projectNameSupported(projectName))
+			throw new IllegalArgumentException(format("The project name \"{}\" is not supported.", projectName));
 		return new BranchIdImp(new SCMHead("feature/"+(projectName.substring("f-".length()))));
 	}
 
@@ -40,6 +45,7 @@ final class BranchNameMapperImpl implements BranchNameMapper {
 	@Override
 	public boolean projectNameSupported(final String projectName) {
 		if(projectName==null) return false;
+		else if(equal(projectName, templateProjectName)) return false;
 		else return projectName.startsWith("f-") && noSpecialCharacters(projectName);
 	}
 
@@ -56,8 +62,7 @@ final class BranchNameMapperImpl implements BranchNameMapper {
 
 	@Override
 	public boolean directorySupported(final Path directory) {
-		if(!directory.getParent().toAbsolutePath().normalize().equals(rootDirectory)) 
-			return false;
+		if(!directory.getParent().toAbsolutePath().normalize().equals(rootDirectory)) return false;
 		else return projectNameSupported(getProjectName(directory));
 	}
 	

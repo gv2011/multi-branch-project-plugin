@@ -36,7 +36,7 @@ public final class StaticWiring<PA extends ItemGroup<P>, P extends AbstractProje
 		    final Long               maxAge
 		    ) {
 		
-		mapper = new BranchNameMapperImpl(rootDirectory);
+		mapper = new BranchNameMapperImpl(rootDirectory, templateName);
 
 		subProjectRegistry = new SubProjectRegistry<PA,P,R>(
 				projectClass, 
@@ -63,7 +63,7 @@ public final class StaticWiring<PA extends ItemGroup<P>, P extends AbstractProje
 	}
 
 	
-	public SubProjectRepository<P> getSubProjectRegistry() {
+	public SubProjectRepository<P> getSubProjectRepository() {
 		return subProjectRegistry;
 	}
 
