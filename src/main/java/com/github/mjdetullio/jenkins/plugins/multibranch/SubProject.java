@@ -5,7 +5,7 @@ import java.util.Date;
 
 import javax.annotation.Nullable;
 
-public interface SubProject<P> {
+public interface SubProject<P> extends Comparable<SubProject<?>>{
 	
 	boolean isTemplate();
 	

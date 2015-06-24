@@ -8,8 +8,7 @@ import javax.annotation.Nullable;
 import com.github.mjdetullio.jenkins.plugins.multibranch.BranchId;
 import com.github.mjdetullio.jenkins.plugins.multibranch.SubProject;
 
-class SubProjectImpl<P>
-implements SubProject<P>{
+class SubProjectImpl<P> implements SubProject<P>{
 	private final @Nullable BranchId branch;
 	private final boolean template;
 	private final String name;
@@ -98,10 +97,12 @@ implements SubProject<P>{
 	public boolean equals(final Object obj) {
 		if (this == obj) return true;
 		else if (!(obj instanceof SubProject)) return false;
-		else{
-		  final SubProject<?> other = (SubProject<?>) obj;
-		  return name.equals(other.name());
-		}
+		else return compareTo((SubProject<?>) obj)==0;
+	}
+
+	@Override
+	public int compareTo(final SubProject<?> o) {
+		return o==null?1:name.compareTo(o.name());
 	}
 
 
