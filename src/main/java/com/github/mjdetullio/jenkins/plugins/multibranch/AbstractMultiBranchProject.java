@@ -112,10 +112,6 @@ public abstract class AbstractMultiBranchProject<P extends AbstractProject<P, B>
 extends AbstractProject<P, B>
 implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	
-	static{
-		Logging.tweak();
-	}
-	
 	private static final Logger LOG = LoggerFactory.getLogger(AbstractMultiBranchProject.class);
 
 	static final String TEMPLATE = "template";
@@ -349,7 +345,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 		final SubProjectRepository<P> repo = w.getSubProjectRepository();
 		final SubProject<P> project;
 		if(equal(name, TEMPLATE)) {
-			project = repo.getTemplateProject();
+			project = null;
 		} else{
 			final BranchId branch = w.getBranchNameMapper().fromProjectName(name);
 			project = repo.getProject(branch);
@@ -909,7 +905,6 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	 * @throws IOException 
 	 */
 	public void syncBranches(final TaskListener listener) throws IOException {
-		Logging.diagnose();
 //		boolean startSync;
 		if (isDisabled()) {
 			listener.getLogger().println("Project disabled.");
