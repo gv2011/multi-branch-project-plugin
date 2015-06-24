@@ -36,6 +36,19 @@ public class MyLogHandler extends Handler {
 			e.printStackTrace(System.err);
 		}
 	}
+	
+	public void writeLn(final String msg){
+		System.out.println(msg);
+		final byte[] bytes = (msg+'\n').getBytes(StandardCharsets.UTF_8);
+		try {
+			synchronized(lock){
+				Files.write(file, bytes, StandardOpenOption.APPEND, StandardOpenOption.CREATE);
+			}
+		} catch (final IOException e) {
+			e.printStackTrace(System.err);
+		}
+		
+	}
 
 	@Override
 	public void flush() {
