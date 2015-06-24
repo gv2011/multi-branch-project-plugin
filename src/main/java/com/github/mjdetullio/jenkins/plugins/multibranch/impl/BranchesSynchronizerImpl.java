@@ -10,7 +10,6 @@ import hudson.model.ItemGroup;
 import hudson.model.TaskListener;
 import hudson.security.ACL;
 import hudson.triggers.SCMTrigger;
-import hudson.util.StreamTaskListener;
 
 import java.io.IOException;
 import java.io.PrintStream;
@@ -32,6 +31,7 @@ import org.slf4j.LoggerFactory;
 import com.github.mjdetullio.jenkins.plugins.multibranch.BranchId;
 import com.github.mjdetullio.jenkins.plugins.multibranch.BranchNameMapper;
 import com.github.mjdetullio.jenkins.plugins.multibranch.BranchesSynchronizer;
+import com.github.mjdetullio.jenkins.plugins.multibranch.LoggingTaskListener;
 import com.github.mjdetullio.jenkins.plugins.multibranch.SubProject;
 import com.github.mjdetullio.jenkins.plugins.multibranch.SubProjectRepository;
 import com.github.mjdetullio.jenkins.plugins.multibranch.util.Consumer;
@@ -85,7 +85,7 @@ BranchesSynchronizerImpl(
 			public Void call() throws Exception {
 				try {
 					if (syncInProgress.compareAndSet(false, true)) {
-						try (final StreamTaskListener listener = new StreamTaskListener(logFile.toFile())) {
+						try (final LoggingStreamTaskListener listener = new LoggingStreamTaskListener(logFile)) {
 							final Date start = logStart(listener);
 							try {
 								final SecurityContext oldContext = ACL.impersonate(ACL.SYSTEM);
@@ -113,7 +113,7 @@ BranchesSynchronizerImpl(
 		});
 	}
 
-private Date logStart(final StreamTaskListener listener) {
+private Date logStart(final LoggingTaskListener listener) {
 	final Date start = new Date();
 	final String msg = format("Started on {}.",start);
 	LOG.info(msg);
@@ -121,7 +121,7 @@ private Date logStart(final StreamTaskListener listener) {
 	return start;
 }
 
-private void logFinished(final StreamTaskListener listener, final Date start) {
+private void logFinished(final LoggingTaskListener listener, final Date start) {
 	final String msg = format("Done. Took {}.", Duration.since(start));
 	LOG.info(msg);
 	listener.getLogger().println(msg);
@@ -137,7 +137,7 @@ private void logFinished(final StreamTaskListener listener, final Date start) {
 private void doSynchronizeBranches(
 		final SCMSource scmSource, 
 		final P templateProject, 
-		final TaskListener listener)
+		final LoggingTaskListener listener)
 	throws IOException, InterruptedException {
 	final PrintStream log = listener.getLogger();
 	log.println("Synchronizing branches as user "+Jenkins.getAuthentication()+".");
@@ -193,7 +193,7 @@ private ImmutableSortedSet<BranchId> fetchBranches(final SCMSource scmSource, fi
 }
 
 
-protected Callable<Void> getProjectSynchronizer(final BranchId branch, final SCMSource scmSource, final TaskListener listener) 
+protected Callable<Void> getProjectSynchronizer(final BranchId branch, final SCMSource scmSource, final LoggingTaskListener listener) 
 		throws IOException {
 	final SubProject<P> templateProject = subProjectRegistry.getTemplateProject();
 	final SubProject<P> subProject = subProjectRegistry.getProject(branch);
@@ -201,7 +201,7 @@ protected Callable<Void> getProjectSynchronizer(final BranchId branch, final SCM
 	}
 
 
-private <T> void forEach(final Iterable<? extends T> elements, final Consumer<T> action, final TaskListener listener)
+private <T> void forEach(final Iterable<? extends T> elements, final Consumer<T> action, final LoggingTaskListener listener)
 		throws InterruptedException {
 	for (final T element : elements) {
 		try{
