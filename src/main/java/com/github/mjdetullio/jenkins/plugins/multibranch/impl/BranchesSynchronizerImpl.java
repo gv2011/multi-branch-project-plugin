@@ -48,7 +48,7 @@ private static Logger LOG = LoggerFactory.getLogger(BranchesSynchronizerImpl.cla
 private final ItemGroup<? extends Item> parentProject;
 private final SubProjectRepository<P> subProjectRegistry;
 private final BranchNameMapper branchNameMapper;
-Function<ImmutableSortedSet<BranchId>, ImmutableSet<BranchId>> branchFilter;
+private final Function<ImmutableSortedSet<BranchId>, ImmutableSet<BranchId>> branchFilter;
 private final Runnable jenkinsUpdate;
 private final ExecutorService executor;
 private final AtomicBoolean syncInProgress = new AtomicBoolean();
@@ -58,12 +58,14 @@ BranchesSynchronizerImpl(
 		final ItemGroup<? extends Item> parentProject,
 		final SubProjectRepository<P> subProjectRegistry,
 		final BranchNameMapper branchNameMapper,
+		final Function<ImmutableSortedSet<BranchId>, ImmutableSet<BranchId>> branchFilter,
 		final Runnable jenkinsUpdate,
 		final ExecutorService executor) {
 	super();
 	this.parentProject = parentProject;
 	this.subProjectRegistry = subProjectRegistry;
 	this.branchNameMapper = branchNameMapper;
+	this.branchFilter = branchFilter;
 	this.jenkinsUpdate = jenkinsUpdate;
 	this.executor = executor;
 }

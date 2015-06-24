@@ -5,23 +5,32 @@ import hudson.model.AbstractProject;
 import hudson.model.ItemGroup;
 
 import java.nio.file.Path;
+import java.util.Date;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import jenkins.model.Jenkins;
 import jenkins.scm.api.SCMSourceCriteria;
 import jenkins.util.Timer;
 
+import com.github.mjdetullio.jenkins.plugins.multibranch.BranchId;
 import com.github.mjdetullio.jenkins.plugins.multibranch.BranchNameMapper;
 import com.github.mjdetullio.jenkins.plugins.multibranch.BranchesSynchronizer;
 import com.github.mjdetullio.jenkins.plugins.multibranch.SubProjectRepository;
+import com.github.mjdetullio.jenkins.plugins.multibranch.util.AgeFilter;
 import com.google.common.base.Function;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSortedSet;
 
 public final class StaticWiring<PA extends ItemGroup<P>, P extends AbstractProject<P,R>,R extends AbstractBuild<P,R>>{
 	
+	private static final Integer maxCount = 50;
+	private static final Long minHours = 24L;
 	private final BranchNameMapper           mapper;
 	private final BranchesSynchronizer<P>    branchesSynchronizer;
 	private final SCMSourceCriteria          listeningBranchPreseletor;
-	private final SubProjectRegistry<PA,P,R> subProjectRegistry;
+	private final SubProjectRepository<P>    subProjectRepository;
+	private Integer normalCount;
 	
 	public StaticWiring(
 			final Class<P>           projectClass,
@@ -38,7 +47,7 @@ public final class StaticWiring<PA extends ItemGroup<P>, P extends AbstractProje
 		
 		mapper = new BranchNameMapperImpl(rootDirectory, templateName);
 
-		subProjectRegistry = new SubProjectRegistry<PA,P,R>(
+		final SubProjectRegistry<PA, P, R> subProjectRegistry = new SubProjectRegistry<PA,P,R>(
 				projectClass, 
 				parentProject,
 				subProjectsDirectory, 
@@ -47,12 +56,28 @@ public final class StaticWiring<PA extends ItemGroup<P>, P extends AbstractProje
 				mapper, 
 				subProjectFactory);
 		
+		subProjectRepository = subProjectRegistry;
+		
+		
+		final Function<BranchId, Date> lastChangeSupplier = new Function<BranchId, Date>(){
+			@Override
+			public Date apply(final BranchId branch) {
+				subProjectRegistry.getProject(branch);
+				return null;
+			}};
+			
+		final Function<ImmutableSortedSet<BranchId>, ImmutableSet<BranchId>> branchFilter = 
+				new AgeFilter<>(lastChangeSupplier, normalCount, maxCount, minHours, TimeUnit.DAYS);
+		
 		final Runnable jenkinsUpdate = new JenkinsUpdate(Jenkins.getInstance());
+		
 		final ExecutorService executor = Timer.get();
+		
 		branchesSynchronizer = new BranchesSynchronizerImpl<P,R>(
 				parentProject, 
 				subProjectRegistry, 
 				mapper, 
+				branchFilter, 
 				jenkinsUpdate, 
 				executor);
 		
@@ -64,7 +89,7 @@ public final class StaticWiring<PA extends ItemGroup<P>, P extends AbstractProje
 
 	
 	public SubProjectRepository<P> getSubProjectRepository() {
-		return subProjectRegistry;
+		return subProjectRepository;
 	}
 
 	public BranchesSynchronizer<P> getSynchronizer() {
