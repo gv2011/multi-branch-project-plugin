@@ -18,6 +18,9 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import javax.annotation.Nullable;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.github.mjdetullio.jenkins.plugins.multibranch.BranchId;
 import com.github.mjdetullio.jenkins.plugins.multibranch.BranchNameMapper;
 import com.github.mjdetullio.jenkins.plugins.multibranch.SubProject;
@@ -31,6 +34,8 @@ class SubProjectRegistry<PA extends ItemGroup<P>, P extends AbstractProject<P,R>
 extends SubProjectFactoryImpl<PA,P,R>
 implements SubProjectRepository<P>{
 	
+	private static final Logger LOG = LoggerFactory.getLogger(SubProjectRepository.class);
+
 	private final Lock lock = new ReentrantLock();
 	private final Map<BranchId,SubProject<P>> projects = Maps.newHashMap();
 	private final Function<String,P> delegateConstructor;
@@ -96,6 +101,7 @@ implements SubProjectRepository<P>{
 			if(projects.containsKey(branch)) throw new IllegalArgumentException();
 			final SubProject<P> project = super.createNewSubProject(branch);
 			projects.put(branch, project);
+			LOG.info("Created new project {} in directory {}.", project, project.rootDirectory());
 			return project;
 		} finally{unlock();}
 	}
@@ -117,6 +123,7 @@ implements SubProjectRepository<P>{
 			if(projects.containsKey(branch)) throw new IllegalArgumentException();
 			final SubProject<P> project = super.loadExistingSubProject(branch, subProjectDir);
 			projects.put(branch, project);
+			LOG.info("Loaded existing project {} from directory {}.", project, subProjectDir);
 			return project;
 		} finally{unlock();}
 	}
@@ -136,6 +143,7 @@ implements SubProjectRepository<P>{
 				try{
 					project.delegate().delete();
 					success = true;
+					LOG.info("Deleted and removed project {} (directory {}).", project, project.rootDirectory());
 				}finally{
 					if(!success){
 						//Add project again if deletion did not work:

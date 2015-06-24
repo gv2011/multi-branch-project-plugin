@@ -44,19 +44,19 @@ public final class AgeFilter<I extends Iterable<? extends B>,B> implements Funct
 
 
 	@Override
-	public ImmutableSet<B> apply(@Nullable final I branches) {
+	public ImmutableSet<B> apply(@Nullable final I items) {
 			//Sort branches by age and ignore branches without a date or older than maxTime
 			NavigableMap<Duration, B> byAge = new TreeMap<>();
 			final Date now = new Date();
 			int count=0;
-			for(final B branch: branches){
+			for(final B item: items){
 				count++;
-				final Date lastChange = lastChangeSupplier.apply(branch);
+				final Date lastChange = lastChangeSupplier.apply(item);
 				if(lastChange!=null){
 					final Duration age = Duration.fromUntil(lastChange, now);
-					byAge.put(age, branch);
+					byAge.put(age, item);
 				}else{
-					LOG.warn("Age of {} unknown.");
+					LOG.warn("Age of {} unknown.", item);
 				}
 			}
 			

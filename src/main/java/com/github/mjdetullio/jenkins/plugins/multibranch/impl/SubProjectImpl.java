@@ -105,5 +105,10 @@ class SubProjectImpl<P> implements SubProject<P>{
 		return o==null?1:name.compareTo(o.name());
 	}
 
+	@Override
+	public String toString() {
+		return name;
+	}
+
 
 }

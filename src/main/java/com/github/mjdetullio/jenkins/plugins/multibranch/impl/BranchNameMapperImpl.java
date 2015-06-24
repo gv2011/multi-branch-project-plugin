@@ -61,8 +61,9 @@ final class BranchNameMapperImpl implements BranchNameMapper {
 	}
 
 	@Override
-	public boolean directorySupported(final Path directory) {
-		if(!directory.getParent().toAbsolutePath().normalize().equals(rootDirectory)) return false;
+	public boolean directorySupported(Path directory) {
+		directory = directory.toAbsolutePath().normalize();
+		if(!directory.getParent().equals(rootDirectory)) return false;
 		else return projectNameSupported(getProjectName(directory));
 	}
 	
