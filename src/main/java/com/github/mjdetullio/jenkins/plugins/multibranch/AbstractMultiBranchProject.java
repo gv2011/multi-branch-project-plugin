@@ -68,6 +68,7 @@ import java.io.StringWriter;
 import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Field;
 import java.net.URLEncoder;
+import java.nio.file.Path;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -904,14 +905,14 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	 * its exceptions to the listener.
 	 * @throws IOException 
 	 */
-	public void syncBranches(final TaskListener listener) throws IOException {
+	public void syncBranches(final Path logFile) throws IOException {
 //		boolean startSync;
 		if (isDisabled()) {
-			listener.getLogger().println("Project disabled.");
+//			path.getLogger().println("Project disabled.");
 //			startSync = false;
 		}
 		else{
-			getStaticWiring().getSynchronizer().synchronizeBranches(getSCMSource(), getTemplate(), listener);
+			getStaticWiring().getSynchronizer().synchronizeBranches(getSCMSource(), getTemplate(), logFile);
 //			synchronized(this){
 //				//Ensure there is only one active sync thread at any time.
 //				//If there is a new request while a sync is in progress, 

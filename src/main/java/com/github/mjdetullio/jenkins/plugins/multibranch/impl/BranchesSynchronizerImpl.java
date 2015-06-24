@@ -1,5 +1,6 @@
 package com.github.mjdetullio.jenkins.plugins.multibranch.impl;
 
+import static com.github.mjdetullio.jenkins.plugins.multibranch.util.FormattingUtils.format;
 import static com.google.common.collect.ImmutableSortedSet.copyOf;
 import static com.google.common.collect.Lists.transform;
 import hudson.model.AbstractBuild;
@@ -9,9 +10,12 @@ import hudson.model.ItemGroup;
 import hudson.model.TaskListener;
 import hudson.security.ACL;
 import hudson.triggers.SCMTrigger;
+import hudson.util.StreamTaskListener;
 
 import java.io.IOException;
 import java.io.PrintStream;
+import java.nio.file.Path;
+import java.util.Date;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -31,6 +35,7 @@ import com.github.mjdetullio.jenkins.plugins.multibranch.BranchesSynchronizer;
 import com.github.mjdetullio.jenkins.plugins.multibranch.SubProject;
 import com.github.mjdetullio.jenkins.plugins.multibranch.SubProjectRepository;
 import com.github.mjdetullio.jenkins.plugins.multibranch.util.Consumer;
+import com.github.mjdetullio.jenkins.plugins.multibranch.util.Duration;
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -71,38 +76,57 @@ BranchesSynchronizerImpl(
 }
 
 
-@Override
-public Future<Void> synchronizeBranches(final SCMSource scmSource, final P templateProject, final TaskListener listener){
-	LOG.debug("Adding synchronizeBranches task.");
-	return executor.submit(new Callable<Void>(){
-		@Override
-		public Void call() throws Exception {
-			if(syncInProgress.compareAndSet(false, true)){
-				LOG.debug("Starting synchronization run.");
-				try{
-			        final SecurityContext oldContext = ACL.impersonate(ACL.SYSTEM);
-			        try {
-			        	doSynchronizeBranches(scmSource, templateProject, listener);
-			        } catch(final Throwable t){
-			        	LOG.error("Error during branch synchronization.", t);
-			        	t.printStackTrace(listener.fatalError(t.getMessage()));
-			        	throw t;
-			        } finally {
-			            SecurityContextHolder.setContext(oldContext);
-			        }
-				}
-				finally{
-					syncInProgress.set(false);
-					LOG.debug("Finished synchronization run.");
+	@Override
+	public Future<Void> synchronizeBranches(final SCMSource scmSource,
+			final P templateProject, final Path logFile) {
+		LOG.debug("Adding synchronizeBranches task.");
+		return executor.submit(new Callable<Void>() {
+			@Override
+			public Void call() throws Exception {
+				try {
+					if (syncInProgress.compareAndSet(false, true)) {
+						try (final StreamTaskListener listener = new StreamTaskListener(logFile.toFile())) {
+							final Date start = logStart(listener);
+							try {
+								final SecurityContext oldContext = ACL.impersonate(ACL.SYSTEM);
+								try {
+									doSynchronizeBranches(scmSource,templateProject, listener);
+								} catch (final Throwable t) {
+									LOG.error("Error during branch synchronization.",t);
+									t.printStackTrace(listener.fatalError(t.getMessage()));
+								} finally {
+									SecurityContextHolder.setContext(oldContext);
+								}
+							} finally {
+								syncInProgress.set(false);
+								logFinished(listener, start);
+							}
+						}
+					} else {
+						LOG.warn("Skipped synchronization run (still active).");
 					}
-			}else{
-				LOG.warn("Skipped synchronization run (still active).");
-				listener.getLogger().println("Skipping this synchronization run because there is still one active.");
+				} catch (final Throwable t) {
+					LOG.error("Branch synchronization failed.", t);
+				}
+				return null;
 			}
-			return null;
-		}
-	});
+		});
+	}
+
+private Date logStart(final StreamTaskListener listener) {
+	final Date start = new Date();
+	final String msg = format("Started on {}.",start);
+	LOG.info(msg);
+	listener.getLogger().println(msg);
+	return start;
 }
+
+private void logFinished(final StreamTaskListener listener, final Date start) {
+	final String msg = format("Done. Took {}.", Duration.since(start));
+	LOG.info(msg);
+	listener.getLogger().println(msg);
+}
+
 
 
 /**

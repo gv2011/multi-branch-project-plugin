@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.NavigableMap;
 import java.util.TreeMap;
-import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nullable;
 
@@ -28,27 +27,18 @@ public final class AgeFilter<I extends Iterable<? extends B>,B> implements Funct
 
 	final @Nullable Integer normalCount;
 	final @Nullable Integer maxCount;
-	final @Nullable Long minAgeMillis;
-	final long minAgeCount;
-	final TimeUnit minAgeUnit;
+	final @Nullable Duration minAge;
 	
 	
 
 	public AgeFilter(
 			final Function<B, Date> lastChangeSupplier, final @Nullable Integer normalCount,
-			final @Nullable Integer maxCount, final @Nullable Long minAge, final TimeUnit minAgeUnit) {
+			final @Nullable Integer maxCount, final @Nullable Duration minAge) {
 		super();
 		this.lastChangeSupplier = lastChangeSupplier;
 		this.normalCount = normalCount;
 		this.maxCount = maxCount;
-		this.minAgeUnit = minAgeUnit;
-		if(minAge==null){
-			minAgeMillis = null;
-			minAgeCount = -1;
-		}else{
-			minAgeMillis = minAgeUnit.toMillis(minAge);
-			minAgeCount = minAge.longValue();
-		}
+		this.minAge = minAge;
 	}
 
 
@@ -56,14 +46,14 @@ public final class AgeFilter<I extends Iterable<? extends B>,B> implements Funct
 	@Override
 	public ImmutableSet<B> apply(@Nullable final I branches) {
 			//Sort branches by age and ignore branches without a date or older than maxTime
-			NavigableMap<Long, B> byAge = new TreeMap<>();
-			final long now = System.currentTimeMillis();
+			NavigableMap<Duration, B> byAge = new TreeMap<>();
+			final Date now = new Date();
 			int count=0;
 			for(final B branch: branches){
 				count++;
 				final Date lastChange = lastChangeSupplier.apply(branch);
 				if(lastChange!=null){
-					final long age = now-lastChange.getTime();
+					final Duration age = Duration.fromUntil(lastChange, now);
 					byAge.put(age, branch);
 				}else{
 					LOG.warn("Age of {} unknown.");
@@ -74,7 +64,7 @@ public final class AgeFilter<I extends Iterable<? extends B>,B> implements Funct
 			if(maxCount!=null){
 				final int max = maxCount.intValue();
 				if(byAge.size()>max){
-					final Long firstExcluded = new ArrayList<>(byAge.keySet()).get(max);
+					final Duration firstExcluded = new ArrayList<>(byAge.keySet()).get(max);
 					byAge = byAge.headMap(firstExcluded, false);
 					if(LOG.isDebugEnabled()){
 						final int omitted = count-byAge.size();
@@ -83,20 +73,20 @@ public final class AgeFilter<I extends Iterable<? extends B>,B> implements Funct
 				}
 			}
 			
-			NavigableMap<Long, B> result = null;
+			NavigableMap<Duration, B> result = null;
 			if(normalCount==null?false:byAge.size()>normalCount.intValue()){
-				if(minAgeMillis!=null){
+				if(minAge!=null){
 					//Include all that are younger than minTime, even if maxCount is exceeded:
-					final NavigableMap<Long, B> youngest = byAge.headMap(minAgeMillis.longValue(), true);
+					final NavigableMap<Duration, B> youngest = byAge.headMap(minAge, true);
 					if(youngest.size()>=normalCount.intValue()) {
 						result = youngest;
-						LOG.debug("Selected {} items because they all are younger than the minimum age of {} {}.", 
-								result.size() , minAgeCount, minAgeUnit);
+						LOG.debug("Selected {} items because they all are younger than the minimum age of {}.", 
+								result.size() , minAge);
 					}
 				}
 				if(result==null){
 					//Include the maxCount youngest entries:
-					final Long firstExcluded = new ArrayList<>(byAge.keySet()).get(normalCount.intValue());
+					final Duration firstExcluded = new ArrayList<>(byAge.keySet()).get(normalCount.intValue());
 					result = byAge.headMap(firstExcluded, false);
 					LOG.debug("Selected the {} youngest items.", result.size());
 				}

@@ -18,6 +18,7 @@ import com.github.mjdetullio.jenkins.plugins.multibranch.BranchNameMapper;
 import com.github.mjdetullio.jenkins.plugins.multibranch.BranchesSynchronizer;
 import com.github.mjdetullio.jenkins.plugins.multibranch.SubProjectRepository;
 import com.github.mjdetullio.jenkins.plugins.multibranch.util.AgeFilter;
+import com.github.mjdetullio.jenkins.plugins.multibranch.util.Duration;
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
@@ -25,7 +26,7 @@ import com.google.common.collect.ImmutableSortedSet;
 public final class StaticWiring<PA extends ItemGroup<P>, P extends AbstractProject<P,R>,R extends AbstractBuild<P,R>>{
 	
 	private static final Integer maxCount = 50;
-	private static final Long minHours = 24L;
+	private static final Duration minAge = Duration.create(24, TimeUnit.HOURS);
 	private final BranchNameMapper           mapper;
 	private final BranchesSynchronizer<P>    branchesSynchronizer;
 	private final SCMSourceCriteria          listeningBranchPreseletor;
@@ -66,7 +67,7 @@ public final class StaticWiring<PA extends ItemGroup<P>, P extends AbstractProje
 			}};
 			
 		final Function<ImmutableSortedSet<BranchId>, ImmutableSet<BranchId>> branchFilter = 
-				new AgeFilter<>(lastChangeSupplier, normalCount, maxCount, minHours, TimeUnit.DAYS);
+				new AgeFilter<>(lastChangeSupplier, normalCount, maxCount, minAge);
 		
 		final Runnable jenkinsUpdate = new JenkinsUpdate(Jenkins.getInstance());
 		

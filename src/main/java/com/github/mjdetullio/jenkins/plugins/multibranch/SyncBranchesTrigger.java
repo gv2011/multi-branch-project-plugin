@@ -34,15 +34,12 @@ import hudson.model.Item;
 import hudson.model.Items;
 import hudson.triggers.Trigger;
 import hudson.triggers.TriggerDescriptor;
-import hudson.util.StreamTaskListener;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
-import java.text.DateFormat;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Date;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -106,20 +103,20 @@ public class SyncBranchesTrigger<P extends AbstractMultiBranchProject<?,?>> exte
 		}
 
 		try {
-			final StreamTaskListener listener = new StreamTaskListener(getLogFile());
+//			final StreamTaskListener listener = new StreamTaskListener(getLogFile());
+//
+//			final long start = System.currentTimeMillis();
+//
+//			listener.getLogger().println(
+//					"Started on " + DateFormat.getDateTimeInstance().format(
+//							new Date()));
 
-			final long start = System.currentTimeMillis();
+			job.syncBranches(getLogFile().toPath());
 
-			listener.getLogger().println(
-					"Started on " + DateFormat.getDateTimeInstance().format(
-							new Date()));
-
-			job.syncBranches(listener);
-
-			listener.getLogger().println("Done. Took " + Util.getTimeSpanString(
-					System.currentTimeMillis() - start));
-
-			listener.close();
+//			listener.getLogger().println("Done. Took " + Util.getTimeSpanString(
+//					System.currentTimeMillis() - start));
+//
+//			listener.close();
 		} catch (final IOException e) {
 			LOGGER.log(Level.SEVERE,
 					"Failed to record sync branches log for " + job, e);

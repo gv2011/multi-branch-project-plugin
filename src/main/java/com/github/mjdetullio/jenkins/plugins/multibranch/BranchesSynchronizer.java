@@ -1,7 +1,6 @@
 package com.github.mjdetullio.jenkins.plugins.multibranch;
 
-import hudson.model.TaskListener;
-
+import java.nio.file.Path;
 import java.util.concurrent.Future;
 
 import jenkins.scm.api.SCMSource;
@@ -11,5 +10,5 @@ import jenkins.scm.api.SCMSource;
  */
 public interface BranchesSynchronizer<P>{
 	
-Future<Void> synchronizeBranches(final SCMSource scmSource, final P templateProject, final TaskListener listener);
+Future<Void> synchronizeBranches(final SCMSource scmSource, final P templateProject, final Path logFile);
 }

@@ -111,6 +111,10 @@ final class BranchNameMapperImpl implements BranchNameMapper {
 			return scmHead.hashCode();
 		}
 		@Override
+		public String toString() {
+			return scmHead.toString();
+		}
+		@Override
 		public boolean equals(final Object obj) {
 			if (this == obj) return true;
 			else if (!(obj instanceof BranchId)) return false;
