@@ -62,8 +62,7 @@ public final class StaticWiring<PA extends ItemGroup<P>, P extends AbstractProje
 		final Function<BranchId, Date> lastChangeSupplier = new Function<BranchId, Date>(){
 			@Override
 			public Date apply(final BranchId branch) {
-				subProjectRegistry.getProject(branch);
-				return null;
+				return subProjectRegistry.getLastChange(branch);
 			}};
 			
 		final Function<ImmutableSortedSet<BranchId>, ImmutableSet<BranchId>> branchFilter = 

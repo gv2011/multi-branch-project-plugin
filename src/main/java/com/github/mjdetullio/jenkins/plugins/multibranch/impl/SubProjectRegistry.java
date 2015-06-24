@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.WeakHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -33,6 +34,7 @@ implements SubProjectRepository<P>{
 	private final Lock lock = new ReentrantLock();
 	private final Map<BranchId,SubProject<P>> projects = Maps.newHashMap();
 	private final Function<String,P> delegateConstructor;
+	private final Map<BranchId,Date> branchChangeDates = new WeakHashMap<>();
 	
 	private SubProject<P> templateProject;
 	
@@ -148,8 +150,19 @@ implements SubProjectRepository<P>{
 
 	@Override
 	public void registerLastChange(final BranchId branch, final Date lastChange) {
-		final SubProject<P> project = getProject(branch);
-		if(project!=null) project.setLastScmChange(lastChange);
+		lock();
+		try{
+			branchChangeDates.put(branch, lastChange);
+			final SubProject<P> project = getProject(branch);
+			if(project!=null) project.setLastScmChange(lastChange);
+		} finally{unlock();}
+	}
+
+	public @Nullable Date getLastChange(final BranchId branch) {
+		lock();
+		try{
+			return branchChangeDates.get(branch);
+		} finally{unlock();}
 	}
 
 	@Override
