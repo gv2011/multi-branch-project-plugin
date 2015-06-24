@@ -3,6 +3,7 @@ package com.github.mjdetullio.jenkins.plugins.multibranch;
 import java.util.Date;
 import java.util.logging.Handler;
 import java.util.logging.Level;
+import java.util.logging.LogManager;
 import java.util.logging.Logger;
 
 import com.github.mjdetullio.jenkins.plugins.multibranch.impl.BranchesSynchronizerImpl;
@@ -30,13 +31,16 @@ public class Logging {
 	public static void diagnose() {
 		final StringBuilder sb = new StringBuilder();
 		sb.append("\nDiagnose: "+new Date()+" "+Thread.currentThread()+"\n");
-		final Logger test = Logger.getLogger(BranchesSynchronizerImpl.class.getName());
+		final LogManager mgr = LogManager.getLogManager();
+		handler.writeLn("LogManager: "+mgr.getClass());
+		Logger test = Logger.getLogger(BranchesSynchronizerImpl.class.getName());
 		while(test!=null){
 			sb.append(test.getName()+"\t "+test.getUseParentHandlers()+"\t "+test.getLevel()+"\n");
 			final Handler[] handlers = test.getHandlers();
 			if(handlers!=null) for(final Handler h: handlers){
 				sb.append("  Handler: "+h.getClass()+"\n");
 			}
+			test = test.getParent();
 		}
 		handler.writeLn(sb.toString());
 	}
