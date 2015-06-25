@@ -1,10 +1,11 @@
 package com.github.mjdetullio.jenkins.plugins.multibranch.impl;
 
+import static com.github.mjdetullio.jenkins.plugins.multibranch.util.FormattingUtils.format;
 import static com.google.common.collect.ImmutableSortedSet.copyOf;
 import static com.google.common.collect.Lists.transform;
+import hudson.model.ItemGroup;
 import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
-import hudson.model.ItemGroup;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -12,6 +13,8 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -35,6 +38,8 @@ extends SubProjectFactoryImpl<PA,P,R>
 implements SubProjectRepository<P>{
 	
 	private static final Logger LOG = LoggerFactory.getLogger(SubProjectRepository.class);
+	
+	private static final ConcurrentMap<Path,Object> USED_PATHS = new ConcurrentHashMap<>();
 
 	private final Lock lock = new ReentrantLock();
 	private final Map<BranchId,SubProject<P>> projects = Maps.newHashMap();
@@ -43,13 +48,20 @@ implements SubProjectRepository<P>{
 	
 	private SubProject<P> templateProject;
 	
-	public SubProjectRegistry(final Class<P> projectClass, final PA parent,
+	public SubProjectRegistry(final Path parentDir, final Class<P> projectClass, final PA parent,
 			final Path subProjectsDirectory, final Path templateDir, final String templateName,
 			final BranchNameMapper nameMapper, 
 			final Function<String,P> delegateConstructor) {
 		super(projectClass, parent, subProjectsDirectory, templateDir, templateName,
 				nameMapper);
+		checkOnlyOneInstancePerDirectory(parentDir);
 		this.delegateConstructor = delegateConstructor;
+	}
+
+	private static void checkOnlyOneInstancePerDirectory(final Path parentDir) {
+		final Object before = USED_PATHS.putIfAbsent(parentDir, new Object());
+		if(before!=null) 
+			throw new IllegalStateException(format("There is already a project handling {}", parentDir));
 	}
 
 	private void lock(){

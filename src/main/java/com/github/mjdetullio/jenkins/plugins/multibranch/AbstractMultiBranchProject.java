@@ -29,12 +29,9 @@ import static javax.servlet.http.HttpServletResponse.SC_BAD_REQUEST;
 import hudson.Extension;
 import hudson.Util;
 import hudson.XmlFile;
-import hudson.model.AbstractBuild;
-import hudson.model.AbstractProject;
 import hudson.model.Action;
 import hudson.model.BallColor;
 import hudson.model.DependencyGraph;
-import hudson.model.Descriptor;
 import hudson.model.HealthReport;
 import hudson.model.Item;
 import hudson.model.ItemGroup;
@@ -44,13 +41,17 @@ import hudson.model.Result;
 import hudson.model.Saveable;
 import hudson.model.TaskListener;
 import hudson.model.TopLevelItem;
-import hudson.model.View;
-import hudson.model.ViewDescriptor;
 import hudson.model.ViewGroup;
 import hudson.model.ViewGroupMixIn;
+import hudson.model.AbstractBuild;
+import hudson.model.AbstractProject;
+import hudson.model.Descriptor;
+import hudson.model.View;
+import hudson.model.ViewDescriptor;
 import hudson.model.listeners.ItemListener;
 import hudson.model.listeners.SaveableListener;
 import hudson.scm.NullSCM;
+import hudson.scm.SCM;
 import hudson.tasks.Publisher;
 import hudson.triggers.Trigger;
 import hudson.util.CopyOnWriteList;
@@ -145,8 +146,6 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	private transient boolean repeatSync;
 
 
-	
-	
 	protected abstract Class<P> projectClass();
 
 	/**
@@ -451,8 +450,13 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	}
 
 	private boolean isTemplateSubProject(final P child) {
-		// Null SCM should be the template
-		return child.getScm() == null || child.getScm() instanceof NullSCM;
+		final boolean isTemplate = equal(child.getName(), TEMPLATE);
+		final SCM scm = child.getScm();
+		final boolean hasNullScm = scm==null || scm instanceof NullSCM;
+		if(isTemplate!=hasNullScm) 
+			throw new IllegalStateException(isTemplate?"The template project has a nonnull SCM.":
+				format("The subproject {} has a null SCM.", child));
+		return isTemplate;
 	}
 
 	/**

@@ -1,8 +1,8 @@
 package com.github.mjdetullio.jenkins.plugins.multibranch.impl;
 
+import hudson.model.ItemGroup;
 import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
-import hudson.model.ItemGroup;
 
 import java.nio.file.Path;
 import java.util.Date;
@@ -49,6 +49,7 @@ public final class StaticWiring<PA extends ItemGroup<P>, P extends AbstractProje
 		mapper = new BranchNameMapperImpl(rootDirectory, templateName);
 
 		final SubProjectRegistry<PA, P, R> subProjectRegistry = new SubProjectRegistry<PA,P,R>(
+				rootDirectory,
 				projectClass, 
 				parentProject,
 				subProjectsDirectory, 
