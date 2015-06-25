@@ -1,11 +1,14 @@
 package com.github.mjdetullio.jenkins.plugins.multibranch.impl;
 
+import static com.github.mjdetullio.jenkins.plugins.multibranch.util.FormattingUtils.format;
 import hudson.XmlFile;
 import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
 import hudson.model.Item;
 import hudson.model.ItemGroup;
 import hudson.model.TaskListener;
+import hudson.scm.NullSCM;
+import hudson.scm.SCM;
 
 import java.io.PrintStream;
 import java.util.concurrent.Callable;
@@ -54,7 +57,9 @@ public class ProjectSyncronizer<P extends AbstractProject<P,R>,R extends Abstrac
 		 * the wrong location during save, load, and elsewhere if SCM
 		 * remains null (or NullSCM).
 		 */
-		delegate.setScm(scmSource.build(subProject.branch().toSCMHead()));
+		final SCM scm = scmSource.build(subProject.branch().toSCMHead());
+		if(scm==null|| scm instanceof NullSCM) throw new IllegalStateException(format("No SCM for {}.", subProject));
+		delegate.setScm(scm);
 
 		// Work-around for JENKINS-21017
 		delegate.setCustomWorkspace(

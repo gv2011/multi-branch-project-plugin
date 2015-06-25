@@ -14,6 +14,7 @@ import hudson.triggers.SCMTrigger;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Path;
+import java.util.Collection;
 import java.util.Date;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
@@ -23,6 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import jenkins.model.Jenkins;
 import jenkins.scm.api.SCMSource;
 
+import org.acegisecurity.Authentication;
 import org.acegisecurity.context.SecurityContext;
 import org.acegisecurity.context.SecurityContextHolder;
 import org.slf4j.Logger;
@@ -140,10 +142,14 @@ private void doSynchronizeBranches(
 		final LoggingTaskListener listener)
 	throws IOException, InterruptedException {
 	final PrintStream log = listener.getLogger();
-	log.println("Synchronizing branches as user "+Jenkins.getAuthentication()+".");
+	final Authentication user = Jenkins.getAuthentication();
+	LOG.info("Synchronizing branches as user {}.",user==null?null:user.getName()+".");
 	
 	// Get all SCM branches when this method starts (snapshot):
+	log.println(format("---\nReading branches from {}.",scmSource));
 	final ImmutableSortedSet<BranchId> allBranches = fetchBranches(scmSource, listener);
+	log.println(format("Finished reading branches.\n---"));
+
 	// Get all current branches (snapshot):	
 	final ImmutableSortedSet<BranchId> existingBranches = subProjectRegistry.getBranches();
 	
@@ -152,23 +158,22 @@ private void doSynchronizeBranches(
 		@Override
 		public void accept(final BranchId branch) {
 			subProjectRegistry.createNewSubProject(branch);			
-		}}, listener);
+		}}, listener, "Creating {} new sub-projects:");
 
 	final ImmutableSortedSet<BranchId> branchesToDelete = copyOf(Sets.difference(existingBranches, allBranches));
 	forEach(branchesToDelete, new Consumer<BranchId>(){
 		@Override
 		public void accept(final BranchId branch) throws IOException, InterruptedException {
 			subProjectRegistry.delete(branch);			
-		}}, listener);
+		}}, listener, "Deleting {} old sub-projects:");
 	
-	final ImmutableSortedSet<BranchId> remainingBranches = copyOf(Sets.difference(allBranches, newBranches));
-	forEach(remainingBranches, new Consumer<BranchId>(){
+	forEach(allBranches, new Consumer<BranchId>(){
 		@Override
 		public void accept(final BranchId branch) throws Exception {
 			getProjectSynchronizer(branch, scmSource, listener).call();			
-		}}, listener);
+		}}, listener, "Synchronizing {} sub-projects:");
 	
-
+	log.println("Updating Jenkins");
 	jenkinsUpdate.run();
 
 	// Trigger build for new branches
@@ -177,11 +182,10 @@ private void doSynchronizeBranches(
 		@Override
 		public void accept(final BranchId branch) throws Exception {
 			final SubProject<P> project = subProjectRegistry.getProject(branch);
-			if(project!=null) {
-				final SCMTrigger.SCMTriggerCause cause = new SCMTrigger.SCMTriggerCause("New branch detected.");
-				project.delegate().scheduleBuild(cause);
-			}
-		}}, listener);
+			if(project==null) throw new IllegalStateException(format("No project found for {}.", branch));
+			final SCMTrigger.SCMTriggerCause cause = new SCMTrigger.SCMTriggerCause("New branch detected.");
+			project.delegate().scheduleBuild(cause);
+		}}, listener, "Triggering build for {} sub-projects:");
 }
 
 
@@ -201,15 +205,20 @@ protected Callable<Void> getProjectSynchronizer(final BranchId branch, final SCM
 	}
 
 
-private <T> void forEach(final Iterable<? extends T> elements, final Consumer<T> action, final LoggingTaskListener listener)
+private <T> void forEach(final Collection<? extends T> elements, final Consumer<T> action, 
+		final LoggingTaskListener listener, final String message)
 		throws InterruptedException {
+	final PrintStream log = listener.getLogger();
+	log.println(format(message, elements.size()));
 	for (final T element : elements) {
 		try{
 			action.accept(element);
+			log.println(format("{}: DONE.",element));
 		} catch (final InterruptedException e) {
+			listener.error(format("Interrupted while doing {}.",element));
 			throw e;
 		} catch (final Exception e) {
-			e.printStackTrace(listener.fatalError(e.getMessage()));
+			listener.fatalError(e, format("{}: FAILED. Exception: ",element));
 		}
 	}
 }
