@@ -64,6 +64,8 @@ public class ProjectSyncronizer<P extends AbstractProject<P,R>,R extends Abstrac
 		// Work-around for JENKINS-21017
 		delegate.setCustomWorkspace(
 				templateProject.delegate().getCustomWorkspace());
+		
+		delegate.makeDisabled(false);
 
 		delegate.onLoad(parentProject, subProject.name());
 		return null;
