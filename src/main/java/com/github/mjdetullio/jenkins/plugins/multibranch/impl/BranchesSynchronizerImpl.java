@@ -148,30 +148,32 @@ private void doSynchronizeBranches(
 	// Get all SCM branches when this method starts (snapshot):
 	log.println(format("---\nReading branches from {}.",scmSource));
 	final ImmutableSortedSet<BranchId> allBranches = fetchBranches(scmSource, listener);
-	log.println(format("Finished reading branches.\n---"));
+	log.println(format("Finished. SCM currently contains {} relevant branches.\n---", allBranches.size()));
 
 	// Get all current branches (snapshot):	
 	final ImmutableSortedSet<BranchId> existingBranches = subProjectRegistry.getBranches();
+	log.println(format("---\nCurrently there are sub-projects for the following {} branches:", existingBranches.size()));
+	logList(log, existingBranches);
 	
 	final ImmutableSortedSet<BranchId> newBranches = copyOf(Sets.difference(allBranches, existingBranches));
 	forEach(newBranches, new Consumer<BranchId>(){
 		@Override
 		public void accept(final BranchId branch) {
 			subProjectRegistry.createNewSubProject(branch);			
-		}}, listener, "Creating {} new sub-projects:");
+		}}, listener, "---\nCreating {} new sub-projects:");
 
 	final ImmutableSortedSet<BranchId> branchesToDelete = copyOf(Sets.difference(existingBranches, allBranches));
 	forEach(branchesToDelete, new Consumer<BranchId>(){
 		@Override
 		public void accept(final BranchId branch) throws IOException, InterruptedException {
 			subProjectRegistry.delete(branch);			
-		}}, listener, "Deleting {} old sub-projects:");
+		}}, listener, "---\nDeleting {} old sub-projects:");
 	
 	forEach(allBranches, new Consumer<BranchId>(){
 		@Override
 		public void accept(final BranchId branch) throws Exception {
 			getProjectSynchronizer(branch, scmSource, listener).call();			
-		}}, listener, "Synchronizing {} sub-projects:");
+		}}, listener, "---\nSynchronizing {} sub-projects:");
 	
 	log.println("Updating Jenkins");
 	jenkinsUpdate.run();
@@ -185,8 +187,14 @@ private void doSynchronizeBranches(
 			if(project==null) throw new IllegalStateException(format("No project found for {}.", branch));
 			final SCMTrigger.SCMTriggerCause cause = new SCMTrigger.SCMTriggerCause("New branch detected.");
 			project.delegate().scheduleBuild(cause);
-		}}, listener, "Triggering build for {} sub-projects:");
+		}}, listener, "---\nTriggering build for {} sub-projects:");
 }
+
+
+private void logList(final PrintStream log,
+		final Iterable<?> items) {
+	for(final Object item: items) log.println(format(" * {}", item));
+  }
 
 
 private ImmutableSortedSet<BranchId> fetchBranches(final SCMSource scmSource, final TaskListener listener) throws InterruptedException, IOException {
@@ -210,6 +218,7 @@ private <T> void forEach(final Collection<? extends T> elements, final Consumer<
 		throws InterruptedException {
 	final PrintStream log = listener.getLogger();
 	log.println(format(message, elements.size()));
+	logList(log, elements);
 	for (final T element : elements) {
 		try{
 			action.accept(element);
