@@ -9,7 +9,7 @@ public final class Duration implements Comparable<Duration>{
 	
 	private final long millis;
 
-	public final long getMillis() {
+	public final long toMillis() {
 		return millis;
 	}
 
@@ -18,20 +18,20 @@ public final class Duration implements Comparable<Duration>{
 		this.millis = millis;
 	}
 
-	public static Duration fromMillis(final long millis) {
+	public static Duration ofMllis(final long millis) {
 		return new Duration(millis);
 	}
 
-	public static Duration create(final long i, final TimeUnit unit) {
-		return fromMillis(unit.toMillis(i));
+	public static Duration of(final long amount, final TimeUnit unit){
+		return ofMllis(unit.toMillis(amount));
 	}
 
 	public static Duration fromUntil(final Date from, final Date until) {
-		return fromMillis(until.getTime()-from.getTime());
+		return ofMllis(until.getTime()-from.getTime());
 	}
 	
 	public static Duration since(final Date date) {
-		return fromMillis(System.currentTimeMillis()-date.getTime());
+		return ofMllis(System.currentTimeMillis()-date.getTime());
 	}
 
 

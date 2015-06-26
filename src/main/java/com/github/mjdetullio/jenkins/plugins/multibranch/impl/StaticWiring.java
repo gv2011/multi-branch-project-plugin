@@ -1,8 +1,8 @@
 package com.github.mjdetullio.jenkins.plugins.multibranch.impl;
 
-import hudson.model.ItemGroup;
 import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
+import hudson.model.ItemGroup;
 
 import java.nio.file.Path;
 import java.util.Date;
@@ -26,7 +26,7 @@ import com.google.common.collect.ImmutableSortedSet;
 public final class StaticWiring<PA extends ItemGroup<P>, P extends AbstractProject<P,R>,R extends AbstractBuild<P,R>>{
 	
 	private static final Integer maxCount = 50;
-	private static final Duration minAge = Duration.create(24, TimeUnit.HOURS);
+	private static final Duration minAge = Duration.of(24, TimeUnit.HOURS);
 	private final BranchNameMapper           mapper;
 	private final BranchesSynchronizer<P>    branchesSynchronizer;
 	private final SCMSourceCriteria          listeningBranchPreseletor;

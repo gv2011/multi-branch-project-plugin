@@ -3,21 +3,21 @@ package com.github.mjdetullio.jenkins.plugins.multibranch.impl;
 import static com.github.mjdetullio.jenkins.plugins.multibranch.util.FormattingUtils.format;
 import static com.google.common.collect.ImmutableSortedSet.copyOf;
 import static com.google.common.collect.Lists.transform;
-import hudson.model.ItemGroup;
 import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
+import hudson.model.ItemGroup;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.TimerTask;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 
 import javax.annotation.Nullable;
 
@@ -28,6 +28,8 @@ import com.github.mjdetullio.jenkins.plugins.multibranch.BranchId;
 import com.github.mjdetullio.jenkins.plugins.multibranch.BranchNameMapper;
 import com.github.mjdetullio.jenkins.plugins.multibranch.SubProject;
 import com.github.mjdetullio.jenkins.plugins.multibranch.SubProjectRepository;
+import com.github.mjdetullio.jenkins.plugins.multibranch.util.DiagnosticLock;
+import com.github.mjdetullio.jenkins.plugins.multibranch.util.Duration;
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedSet;
@@ -40,13 +42,17 @@ implements SubProjectRepository<P>{
 	private static final Logger LOG = LoggerFactory.getLogger(SubProjectRepository.class);
 	
 	private static final ConcurrentMap<Path,Object> USED_PATHS = new ConcurrentHashMap<>();
+	
+	private static final Duration LOCK_TIMEOUT = Duration.of(60, TimeUnit.SECONDS);
 
-	private final Lock lock = new ReentrantLock();
+	private final Lock lock;
 	private final Map<BranchId,SubProject<P>> projects = Maps.newHashMap();
 	private final Function<String,P> delegateConstructor;
 	private final Map<BranchId,Date> branchChangeDates = new WeakHashMap<>();
 	
 	private SubProject<P> templateProject;
+
+	private TimerTask warnTask;
 	
 	public SubProjectRegistry(final Path parentDir, final Class<P> projectClass, final PA parent,
 			final Path subProjectsDirectory, final Path templateDir, final String templateName,
@@ -56,6 +62,7 @@ implements SubProjectRepository<P>{
 				nameMapper);
 		checkOnlyOneInstancePerDirectory(parentDir);
 		this.delegateConstructor = delegateConstructor;
+		lock = new DiagnosticLock(parent.getFullName(), LOCK_TIMEOUT);
 	}
 
 	private static void checkOnlyOneInstancePerDirectory(final Path parentDir) {
@@ -65,11 +72,7 @@ implements SubProjectRepository<P>{
 	}
 
 	private void lock(){
-		boolean success = false;
-		try {
-			success = lock.tryLock(10, TimeUnit.SECONDS);
-		} catch (final InterruptedException e) {}
-		if(!success) throw new IllegalStateException(this+" is locked.");
+		lock.lock();
 	}
 
 	private void unlock(){
