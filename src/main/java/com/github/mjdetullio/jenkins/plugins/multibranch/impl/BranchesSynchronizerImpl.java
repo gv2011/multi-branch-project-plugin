@@ -19,6 +19,7 @@ import java.util.Date;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import jenkins.model.Jenkins;
@@ -59,6 +60,8 @@ private final Function<ImmutableSortedSet<BranchId>, ImmutableSet<BranchId>> bra
 private final Runnable jenkinsUpdate;
 private final ExecutorService executor;
 private final AtomicBoolean syncInProgress = new AtomicBoolean();
+private final Semaphore initializedSemaphore;
+private boolean initialized;
 
 
 BranchesSynchronizerImpl(
@@ -67,7 +70,8 @@ BranchesSynchronizerImpl(
 		final BranchNameMapper branchNameMapper,
 		final Function<ImmutableSortedSet<BranchId>, ImmutableSet<BranchId>> branchFilter,
 		final Runnable jenkinsUpdate,
-		final ExecutorService executor) {
+		final ExecutorService executor,
+		final Semaphore initialized) {
 	super();
 	this.parentProject = parentProject;
 	this.subProjectRegistry = subProjectRegistry;
@@ -75,6 +79,7 @@ BranchesSynchronizerImpl(
 	this.branchFilter = branchFilter;
 	this.jenkinsUpdate = jenkinsUpdate;
 	this.executor = executor;
+	this.initializedSemaphore = initialized;
 }
 
 
@@ -89,15 +94,22 @@ BranchesSynchronizerImpl(
 					if (syncInProgress.compareAndSet(false, true)) {
 						try (final LoggingStreamTaskListener listener = new LoggingStreamTaskListener(logFile)) {
 							final Date start = logStart(listener);
+							waitUntilInitialized(listener);
 							try {
-								final SecurityContext oldContext = ACL.impersonate(ACL.SYSTEM);
+								final SecurityContext oldContext = ACL
+										.impersonate(ACL.SYSTEM);
 								try {
-									doSynchronizeBranches(scmSource,templateProject, listener);
+									doSynchronizeBranches(scmSource,
+											templateProject, listener);
 								} catch (final Throwable t) {
-									LOG.error("Error during branch synchronization.",t);
-									t.printStackTrace(listener.fatalError(t.getMessage()));
+									LOG.error(
+											"Error during branch synchronization.",
+											t);
+									t.printStackTrace(listener.fatalError(t
+											.getMessage()));
 								} finally {
-									SecurityContextHolder.setContext(oldContext);
+									SecurityContextHolder
+											.setContext(oldContext);
 								}
 							} finally {
 								syncInProgress.set(false);
@@ -112,8 +124,21 @@ BranchesSynchronizerImpl(
 				}
 				return null;
 			}
+
 		});
 	}
+	
+private void waitUntilInitialized(final LoggingStreamTaskListener listener) throws InterruptedException {
+	if(!initialized){
+		final PrintStream logger = listener.getLogger();
+		logger.println("Waiting until project has been initialized.");
+		initializedSemaphore.acquire();
+		initialized = true;
+		logger.println("Project initialization finished.");
+	}
+		
+}
+
 
 private Date logStart(final LoggingTaskListener listener) {
 	final Date start = new Date();

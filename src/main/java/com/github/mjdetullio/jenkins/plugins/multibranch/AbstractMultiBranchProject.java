@@ -29,9 +29,12 @@ import static javax.servlet.http.HttpServletResponse.SC_BAD_REQUEST;
 import hudson.Extension;
 import hudson.Util;
 import hudson.XmlFile;
+import hudson.model.AbstractBuild;
+import hudson.model.AbstractProject;
 import hudson.model.Action;
 import hudson.model.BallColor;
 import hudson.model.DependencyGraph;
+import hudson.model.Descriptor;
 import hudson.model.HealthReport;
 import hudson.model.Item;
 import hudson.model.ItemGroup;
@@ -41,13 +44,10 @@ import hudson.model.Result;
 import hudson.model.Saveable;
 import hudson.model.TaskListener;
 import hudson.model.TopLevelItem;
-import hudson.model.ViewGroup;
-import hudson.model.ViewGroupMixIn;
-import hudson.model.AbstractBuild;
-import hudson.model.AbstractProject;
-import hudson.model.Descriptor;
 import hudson.model.View;
 import hudson.model.ViewDescriptor;
+import hudson.model.ViewGroup;
+import hudson.model.ViewGroupMixIn;
 import hudson.model.listeners.ItemListener;
 import hudson.model.listeners.SaveableListener;
 import hudson.scm.NullSCM;
@@ -305,6 +305,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 
 		// Will check triggers(), add & start default sync cron if not there
 		getSyncBranchesTrigger();
+		wiring.initialized();
 	}
 
 

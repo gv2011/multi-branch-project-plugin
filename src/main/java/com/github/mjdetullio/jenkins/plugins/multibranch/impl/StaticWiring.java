@@ -7,6 +7,7 @@ import hudson.model.ItemGroup;
 import java.nio.file.Path;
 import java.util.Date;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 import jenkins.model.Jenkins;
@@ -31,6 +32,7 @@ public final class StaticWiring<PA extends ItemGroup<P>, P extends AbstractProje
 	private final BranchesSynchronizer<P>    branchesSynchronizer;
 	private final SCMSourceCriteria          listeningBranchPreseletor;
 	private final SubProjectRepository<P>    subProjectRepository;
+	private final Semaphore                  initialized = new Semaphore(0);
 	private Integer normalCount;
 	
 	public StaticWiring(
@@ -73,14 +75,14 @@ public final class StaticWiring<PA extends ItemGroup<P>, P extends AbstractProje
 		final Runnable jenkinsUpdate = new JenkinsUpdate(Jenkins.getInstance());
 		
 		final ExecutorService executor = Timer.get();
-		
 		branchesSynchronizer = new BranchesSynchronizerImpl<P,R>(
 				parentProject, 
 				subProjectRegistry, 
 				mapper, 
 				branchFilter, 
 				jenkinsUpdate, 
-				executor);
+				executor,
+				initialized);
 		
 		listeningBranchPreseletor = new ListeningBranchPreselector(
 				mapper, 
@@ -105,5 +107,7 @@ public final class StaticWiring<PA extends ItemGroup<P>, P extends AbstractProje
 		return listeningBranchPreseletor;
 	}
 	
-	
+	public void initialized(){
+		initialized.release();
+	}
 }
