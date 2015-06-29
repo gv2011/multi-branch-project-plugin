@@ -75,6 +75,11 @@ public final class DiagnosticLock implements Lock{
 	public String toString() {
 		return name;
 	}
+	
+	public void checkLocked() {
+		assert lock.isHeldByCurrentThread();
+	}
+
 
 	@Override
 	public void lockInterruptibly() throws InterruptedException {

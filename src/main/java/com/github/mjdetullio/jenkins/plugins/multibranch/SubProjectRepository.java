@@ -20,4 +20,7 @@ SubProject<P> getProject(final BranchId branch);
 
 void delete(final BranchId project) throws IOException, InterruptedException;
 
+public void ensureInitialized();
+
+
 }

@@ -12,12 +12,10 @@ import java.nio.file.Path;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
-import java.util.TimerTask;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Lock;
 
 import javax.annotation.Nullable;
 
@@ -45,15 +43,16 @@ implements SubProjectRepository<P>{
 	
 	private static final Duration LOCK_TIMEOUT = Duration.of(60, TimeUnit.SECONDS);
 
-	private final Lock lock;
+	private final DiagnosticLock lock;
 	private final Map<BranchId,SubProject<P>> projects = Maps.newHashMap();
 	private final Function<String,P> delegateConstructor;
 	private final Map<BranchId,Date> branchChangeDates = new WeakHashMap<>();
+	private final RepositoryInitializer initializer;
 	
 	private SubProject<P> templateProject;
 
-	private TimerTask warnTask;
-	
+	private boolean initialized;
+
 	public SubProjectRegistry(final Path parentDir, final Class<P> projectClass, final PA parent,
 			final Path subProjectsDirectory, final Path templateDir, final String templateName,
 			final BranchNameMapper nameMapper, 
@@ -63,6 +62,7 @@ implements SubProjectRepository<P>{
 		checkOnlyOneInstancePerDirectory(parentDir);
 		this.delegateConstructor = delegateConstructor;
 		lock = new DiagnosticLock(parent.getFullName(), LOCK_TIMEOUT);
+		initializer = new RepositoryInitializer(nameMapper, subProjectsDirectory);
 	}
 
 	private static void checkOnlyOneInstancePerDirectory(final Path parentDir) {
@@ -84,8 +84,26 @@ implements SubProjectRepository<P>{
 	public ImmutableSortedSet<SubProject<P>> getProjects() {
 		lock();
 		try{
+			ensureInitialized();
 			return ImmutableSortedSet.copyOf(projects.values());
 		} finally{unlock();}
+	}
+
+	@Override
+	public void ensureInitialized() {
+		lock.checkLocked();
+		if(!initialized){
+			boolean success = false;
+			try {
+				initialized = true; //Set this now to prevent recursion.
+				initializer.loadFromDisk(this);
+				success = true;
+			} catch (final IOException e) {
+				throw new IllegalStateException("Initialization failed.");
+			} finally{
+				if(!success) initialized = false;
+			}
+		}		
 	}
 
 	@Override
@@ -93,6 +111,7 @@ implements SubProjectRepository<P>{
 	public SubProject<P> getProject(final BranchId branch) {
 		lock();
 		try{
+			ensureInitialized();
 			return projects.get(branch);
 		} finally{unlock();}
 	}
@@ -113,6 +132,7 @@ implements SubProjectRepository<P>{
 	public SubProject<P> createNewSubProject(final BranchId branch) {
 		lock();
 		try{
+			ensureInitialized();
 			if(projects.containsKey(branch)) throw new IllegalArgumentException();
 			final SubProject<P> project = super.createNewSubProject(branch);
 			projects.put(branch, project);
@@ -125,6 +145,7 @@ implements SubProjectRepository<P>{
 	public SubProject<P> getTemplateProject() {
 		lock();
 		try{
+			ensureInitialized();
 			if(templateProject==null) templateProject = super.getTemplateProject();
 			return templateProject;
 		} finally{unlock();}
@@ -147,10 +168,17 @@ implements SubProjectRepository<P>{
 
 	
 	@Override
+	public SubProject<P> loadExistingSubProject(final Path subProjectDir){
+		throw new UnsupportedOperationException(
+				format("Loading is handled by the {} itself.", SubProjectRepository.class.getSimpleName()));
+	}
+
+	@Override
 	public void delete(final BranchId branch) throws IOException,
 			InterruptedException {
 		lock();
 		try{
+			ensureInitialized();
 			//Remove first to prevent recursive calls via onDeleted():
 			final SubProject<P> project = projects.remove(branch);
 			if(project!=null){
@@ -175,6 +203,7 @@ implements SubProjectRepository<P>{
 	public void registerLastChange(final BranchId branch, final Date lastChange) {
 		lock();
 		try{
+			ensureInitialized();
 			branchChangeDates.put(branch, lastChange);
 			final SubProject<P> project = getProject(branch);
 			if(project!=null) project.setLastScmChange(lastChange);
@@ -184,12 +213,14 @@ implements SubProjectRepository<P>{
 	public @Nullable Date getLastChange(final BranchId branch) {
 		lock();
 		try{
+			ensureInitialized();
 			return branchChangeDates.get(branch);
 		} finally{unlock();}
 	}
 
 	@Override
 	protected P createDelegate(final String name) {
+		lock.checkLocked();
 		return delegateConstructor.apply(name);
 	}
 

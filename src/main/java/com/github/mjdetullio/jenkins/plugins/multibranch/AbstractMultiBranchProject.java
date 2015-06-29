@@ -69,8 +69,6 @@ import java.io.StringWriter;
 import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Field;
 import java.net.URLEncoder;
-import java.nio.file.DirectoryStream.Filter;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.ParseException;
 import java.util.ArrayList;
@@ -232,7 +230,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 
 		final StaticWiring<ItemGroup<P>, P, B> wiring = getStaticWiring();
 		final SubProjectRepository<P> subProjectRepository = wiring.getSubProjectRepository();
-		subProjectRepository.getTemplateProject();
+		subProjectRepository.ensureInitialized();
 		
 //		try {
 //			P templateProject;
@@ -254,26 +252,26 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 //					"Failed to load template project " + getTemplateDir(), e);
 //		}
 //		
-		final Path branchesDir = getBranchesDir().toPath().toAbsolutePath();
-		if (Files.exists(branchesDir)) {
-			if(!Files.isDirectory(branchesDir)) 
-				throw new IllegalStateException(format("{} is not a directory.", branchesDir));
-			final BranchNameMapper mapper = wiring.getBranchNameMapper();
-			final Filter<Path> filter = new Filter<Path>(){
-				@Override
-				public boolean accept(final Path subDir) throws IOException {
-					return mapper.directorySupported(subDir);
-				}};
-			for(final Path subDir:Files.newDirectoryStream(branchesDir, filter)){
-				try {
-					subProjectRepository.loadExistingSubProject(subDir);
-				} catch (final Exception e) {
-					LOG.error(format("Could not load project from directory {}. This will make it "
-							+ "impossible to build a branch with name {}.", 
-							subDir, mapper.fromDirectory(subDir)));
-				}
-			}
-		}
+//		final Path branchesDir = getBranchesDir().toPath().toAbsolutePath();
+//		if (Files.exists(branchesDir)) {
+//			if(!Files.isDirectory(branchesDir)) 
+//				throw new IllegalStateException(format("{} is not a directory.", branchesDir));
+//			final BranchNameMapper mapper = wiring.getBranchNameMapper();
+//			final Filter<Path> filter = new Filter<Path>(){
+//				@Override
+//				public boolean accept(final Path subDir) throws IOException {
+//					return mapper.directorySupported(subDir);
+//				}};
+//			for(final Path subDir:Files.newDirectoryStream(branchesDir, filter)){
+//				try {
+//					subProjectRepository.loadExistingSubProject(subDir);
+//				} catch (final Exception e) {
+//					LOG.error(format("Could not load project from directory {}. This will make it "
+//							+ "impossible to build a branch with name {}.", 
+//							subDir, mapper.fromDirectory(subDir)));
+//				}
+//			}
+//		}
 			
 //		}
 //			
@@ -305,7 +303,6 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 
 		// Will check triggers(), add & start default sync cron if not there
 		getSyncBranchesTrigger();
-		wiring.initialized();
 	}
 
 
