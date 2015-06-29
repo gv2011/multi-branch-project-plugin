@@ -2,7 +2,7 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 	<modelVersion>4.0.0</modelVersion>
-	<groupId>com.github.mjdetullio.jenkins.plugins</groupId>
+	<groupId>org.zalando.jenkins</groupId>
 	<artifactId>multi-branch-project-plugin</artifactId>
 	<version>0.2.2.3-SNAPSHOT</version>
 	<packaging>hpi</packaging>
@@ -15,10 +15,16 @@
 
 	<name>Multi-Branch Project Plugin</name>
 	<description>
-		This plugin adds an additional project type that creates sub-projects
-		for each branch using a shared configuration.
+		This plugin is a fork of the Jenkins Multi-Branch Project Plugin 
+		(https://github.com/mjdetullio/multi-branch-project-plugin).
+		There are two motivations for this fork:
+		1. Solve errors and problems of the original plugin without the risk
+		   of breaking anything that relies on the plugin.
+		2. Adapt the plugin to our specific needs, which are beyond the scope
+		   of the original plugin.
+		Part (1) could possibly be contributed to the original project.
 	</description>
-	<url>https://wiki.jenkins-ci.org/display/JENKINS/Multi-Branch+Project+Plugin</url>
+	<url>https://github.com/gv2011/multi-branch-project-plugin</url>
 
 	<licenses>
 		<license>
@@ -47,7 +53,9 @@
 			<email>mjdetullio@gmail.com</email>
 		</developer>
 		<developer>
-			<id>gv2011</id>
+			<id>eiglhaut</id>
+			<name>Eberhard Iglhaut</name>
+			<email>eberhard.iglhaut.extern@zalando.de</email>
 		</developer>
 	</developers>
 
@@ -126,7 +134,6 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-release-plugin</artifactId>
-				<version>2.5</version>
 			</plugin>
 		</plugins>
 	</build>
