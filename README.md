@@ -1,14 +1,23 @@
-# Jenkins Multi-Branch Project Plugin
+# Jenkins Multi-Branch Project Plugin (mod)
 
 This plugin adds an additional project type that creates sub-projects for each
 branch using a shared configuration.
+
+This plugin is a fork of the Jenkins Multi-Branch Project Plugin 
+(https://github.com/mjdetullio/multi-branch-project-plugin).
+There are two motivations for this fork:
+
+  1. Solve errors and problems of the original plugin without the risk
+     of breaking anything that relies on the plugin.
+  2. Adapt the plugin to our specific needs, which are beyond the scope
+     of the original plugin.
+     
+Part (1) could possibly be contributed to the original project.
 
 ## Usage
 
 Install the plugin using one of these methods:
 
-* Use the Jenkins plugin update center to download and install the latest
-version.
 * Clone this repo, manually compile the HPI file, and upload it through the
 Jenkins interface on the "advanced" tab in the plugin update center to get
 the newest/unreleased code.
@@ -35,35 +44,23 @@ To test in a local Jenkins instance:
 
 ## Credits
 
-Thanks to Stephen Connolly for his work on the Jenkins
-[Literate Plugin](https://github.com/jenkinsci/literate-plugin),
-[Branch API Plugin](https://github.com/jenkinsci/branch-api-plugin), and
-[SCM API Plugin](https://github.com/jenkinsci/scm-api-plugin).  These plugins
-were great reference for creating this plugin's implementation.  The SCM API
-is also what allows this plugin to use different SCM types for obtaining the
-branch list.
+Thanks to Matthew DeTullio for his work on the original Jenkins Multi-Branch 
+Project Plugin (https://github.com/mjdetullio/multi-branch-project-plugin).
 
-### Why not use the Branch API Plugin?
 
-This project was first started from scratch.  After discovering the Branch API,
-the implementation was changed to utilize the API.  However, there were some
-issues with API that caused the switch back to an independent plugin:
+## License
 
-* The vision for this plugin is one consolidated configuration for all branches
-  combined with support for the same build wrappers, builders, publishers, etc.
-  that you would see in the "stock" Jenkins project types.  In order for this to
-  be possible, the project class must extend ```AbstractProject``` (or its
-  sub-type ```Project```).  In the API, its ```MultiBranchProject``` class
-  extends ```AbstractItem```.  This prevents the use of all the
-  wrappers/builders/publishers from not just out-of-box Jenkins, but also the
-  community plugins, which is what makes Jenkins great.
-* The API is still experimental (it has its fair share of _TODOs_ in the
-  source).  This plugin aims to be suitable for a production environment as soon
-  as possible, without dependencies on the progress of the API's development.
-* This plugin favors simplicity in configuration over the complexity seen in the
-  API.  Admittedly, the API offers a lot of flexibility and nice-to-haves when
-  it comes to configuring the project's SCM, but it seems like overkill.
+Copyright 2015 Zalando SE
 
-If the Literate Plugin and the Branch API Plugin become stable, and the API can
-be modified to support the functionality described in the first point, there is
-a likelihood that this plugin will adopt the API.
+Licensed under the MIT license (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.opensource.org/licenses/MIT
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+

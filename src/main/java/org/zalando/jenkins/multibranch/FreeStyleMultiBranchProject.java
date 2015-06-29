@@ -34,8 +34,6 @@ import hudson.model.TopLevelItem;
 import hudson.model.TopLevelItemDescriptor;
 import jenkins.model.Jenkins;
 
-import com.github.mjdetullio.jenkins.plugins.multibranch.Messages;
-
 public class FreeStyleMultiBranchProject 
 	extends AbstractMultiBranchProject<FreeStyleProject, FreeStyleBuild>{
 

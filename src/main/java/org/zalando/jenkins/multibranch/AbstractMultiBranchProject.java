@@ -104,7 +104,7 @@ import org.zalando.jenkins.multibranch.impl.StaticWiring;
 
 import antlr.ANTLRException;
 
-import com.github.mjdetullio.jenkins.plugins.multibranch.Messages;
+import org.zalando.jenkins.multibranch.Messages;
 import com.google.common.base.Function;
 
 
