@@ -82,10 +82,21 @@ public final class DiagnosticLock implements Lock{
 
 	private void beforeActions() {
 		final Date start = new Date();
+		final Thread thread = Thread.currentThread();
 		warnTask = new TimerTask(){
 			@Override
 			public void run() {
-				LOG.warn("{} is locked by {} for {} now.", this, Thread.currentThread(), Duration.since(start));					
+				Duration lockDuration = Duration.since(start);
+				LOG.warn("{} is locked by {} for {} now.", DiagnosticLock.this, thread, lockDuration);
+				if(LOG.isDebugEnabled()){
+					if(lockDuration.compareTo(Duration.of(1, TimeUnit.MINUTES))>0){
+						StringBuilder sb = new StringBuilder("Current stack trace:\n");
+						for(StackTraceElement e: thread.getStackTrace()){
+							sb.append("  ").append(e).append('\n');
+						}
+					}
+				}
+				thread.getStackTrace();
 			}};
 		TIMER.schedule(warnTask, lockTimeout.toMillis()/3, TimeUnit.SECONDS.toMillis(5));
 	}
@@ -123,5 +134,7 @@ public final class DiagnosticLock implements Lock{
 	public Condition newCondition() {
 		throw new UnsupportedOperationException();
 	}
+	
+	
 
 }
