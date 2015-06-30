@@ -45,7 +45,6 @@ import org.zalando.jenkins.multibranch.SubProjectFactory;
 abstract class SubProjectFactoryImpl<PA extends ItemGroup<P>, P extends AbstractProject<P,R>, R extends AbstractBuild<P,R>> 
 implements SubProjectFactory<P>{
 
-	@SuppressWarnings("unused")
 	private static final Logger LOG = LoggerFactory.getLogger(SubProjectFactoryImpl.class);
 
 	private final Class<P> projectClass;

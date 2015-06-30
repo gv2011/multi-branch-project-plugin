@@ -139,9 +139,6 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	private transient volatile ViewGroupMixIn viewGroupMixIn;
 	private transient volatile ViewsTabBar viewsTabBar;
 
-	private transient boolean syncInProgress;
-	private transient boolean repeatSync;
-
 
 	protected abstract Class<P> projectClass();
 
@@ -354,7 +351,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	 * {@inheritDoc}
 	 */
 	@Override
-	public synchronized Collection<P> getItems() {
+	public Collection<P> getItems() {
 		return getStaticWiring().getSubProjectRepository().getDelegates();
 	}
 
@@ -363,7 +360,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	 */
 	@Override
 	@Nullable
-	public synchronized P getItem(final String name) {
+	public P getItem(final String name) {
 		final StaticWiring<ItemGroup<P>, P, B> w = getStaticWiring();
 		final SubProjectRepository<P> repo = w.getSubProjectRepository();
 		final SubProject<P> project;
@@ -410,7 +407,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	 * @throws IOException 
 	 */
 	@Override
-	public synchronized void onDeleted(final P subProject) throws IOException {
+	public void onDeleted(final P subProject) throws IOException {
 		final StaticWiring<ItemGroup<P>, P, B> w = getStaticWiring();
 		final BranchId branch = w.getBranchNameMapper().fromProjectName(subProject.getName());
 		try {
@@ -421,7 +418,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 			iioe.initCause(e);
 			throw iioe;
 		} catch (final ProjectDoesNotExixtException e) {
-			LOG.warn(format("Could not delete {}.", subProject), e);
+			LOG.warn(format("Could not delete {}, because it does not exist any more.", subProject), e);
 		}
 	}
 
@@ -743,6 +740,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 	/**
 	 * {@inheritDoc}
 	 */
+	@SuppressWarnings("unchecked")
 	@Override
 	public void doConfigSubmit(final StaplerRequest req, final StaplerResponse rsp)
 			throws ServletException, Descriptor.FormException, IOException {
@@ -771,7 +769,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 							this.getClass()));
 			final CopyOnWriteList<JobProperty<? super P>> properties = properties();
 			properties.clear();
-			for (final JobProperty p : t) {
+			for (@SuppressWarnings("rawtypes") final JobProperty p : t) {
 				// Hack to set property owner since it is not exposed
 				// p.setOwner(this)
 				try {
