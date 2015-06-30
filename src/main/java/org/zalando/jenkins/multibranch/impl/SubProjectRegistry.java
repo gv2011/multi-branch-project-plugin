@@ -152,12 +152,17 @@ implements SubProjectRepository<P>{
 	}
 
 	@Override
-	public SubProject<P> createNewSubProject(final BranchId branch) {
+	public SubProject<P> createNewSubProject(final BranchId branch) throws ProjectAlreadyExixtsException {
 		lock();
 		try{
 			ensureInitialized();
-			if(projects.containsKey(branch)) throw new IllegalArgumentException();
-			final SubProject<P> project = super.createNewSubProject(branch);
+			if(projects.containsKey(branch)) throw new ProjectAlreadyExixtsException(format("Cannot create new sub-project {}, because it already exists.", branch));
+			SubProject<P> project;
+			try {
+				project = super.createNewSubProject(branch);
+			} catch (final ProjectAlreadyExixtsException e) {
+				throw new IllegalStateException(e);
+			}
 			projects.put(branch, project);
 			LOG.info("Created new project {} in directory {}.", project, project.rootDirectory());
 			return project;

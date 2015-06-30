@@ -30,12 +30,10 @@ import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
 import hudson.model.Item;
 import hudson.model.ItemGroup;
-import hudson.model.TaskListener;
 import hudson.security.ACL;
 import hudson.triggers.SCMTrigger;
 
 import java.io.IOException;
-import java.io.PrintStream;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Date;
@@ -55,9 +53,10 @@ import org.slf4j.LoggerFactory;
 import org.zalando.jenkins.multibranch.BranchId;
 import org.zalando.jenkins.multibranch.BranchNameMapper;
 import org.zalando.jenkins.multibranch.BranchesSynchronizer;
-import org.zalando.jenkins.multibranch.LoggingTaskListener;
 import org.zalando.jenkins.multibranch.SubProject;
+import org.zalando.jenkins.multibranch.SubProjectFactory.ProjectAlreadyExixtsException;
 import org.zalando.jenkins.multibranch.SubProjectRepository;
+import org.zalando.jenkins.multibranch.SubProjectRepository.ProjectDoesNotExixtException;
 import org.zalando.jenkins.multibranch.util.Consumer;
 import org.zalando.jenkins.multibranch.util.Duration;
 
@@ -110,7 +109,7 @@ BranchesSynchronizerImpl(
 			public Void call() throws Exception {
 				try {
 					if (syncInProgress.compareAndSet(false, true)) {
-						try (final LoggingStreamTaskListener listener = new LoggingStreamTaskListener(logFile)) {
+						try (final SyncListener listener = createSyncListener(logFile)) {
 							final Date start = logStart(listener);
 							try {
 								final SecurityContext oldContext = ACL
@@ -119,11 +118,7 @@ BranchesSynchronizerImpl(
 									doSynchronizeBranches(scmSource,
 											templateProject, listener);
 								} catch (final Throwable t) {
-									LOG.error(
-											"Error during branch synchronization.",
-											t);
-									t.printStackTrace(listener.fatalError(t
-											.getMessage()));
+									listener.error("Error during branch synchronization.",t);
 								} finally {
 									SecurityContextHolder
 											.setContext(oldContext);
@@ -142,21 +137,26 @@ BranchesSynchronizerImpl(
 				return null;
 			}
 
+
 		});
 	}
 	
-private Date logStart(final LoggingTaskListener listener) {
+private SyncListener createSyncListener(final Path logFile) {
+	return new SyncListenerImpl(logFile);
+}
+
+private Date logStart(final SyncListener listener) {
 	final Date start = new Date();
 	final String msg = format("Started on {}.",start);
 	LOG.info(msg);
-	listener.getLogger().println(msg);
+	listener.info(msg);
 	return start;
 }
 
-private void logFinished(final LoggingTaskListener listener, final Date start) {
+private void logFinished(final SyncListener listener, final Date start) {
 	final String msg = format("Done. Took {}.", Duration.since(start));
 	LOG.info(msg);
-	listener.getLogger().println(msg);
+	listener.info(msg);
 }
 
 
@@ -169,33 +169,31 @@ private void logFinished(final LoggingTaskListener listener, final Date start) {
 private void doSynchronizeBranches(
 		final SCMSource scmSource, 
 		final P templateProject, 
-		final LoggingTaskListener listener)
+		final SyncListener listener)
 	throws IOException, InterruptedException {
-	final PrintStream log = listener.getLogger();
 	final Authentication user = Jenkins.getAuthentication();
-	LOG.info("Synchronizing branches as user {}.",user==null?null:user.getName()+".");
+	listener.info("Synchronizing branches as user {}.",user==null?null:user.getName()+".");
 	
 	// Get all SCM branches when this method starts (snapshot):
-	log.println(format("---\nReading branches from {}.",scmSource));
+	listener.info("---\nReading branches from {}.",scmSource);
 	final ImmutableSortedSet<BranchId> allBranches = fetchBranches(scmSource, listener);
-	log.println(format("Finished. SCM currently contains {} relevant branches.\n---", allBranches.size()));
+	listener.info("Finished. SCM currently contains {} relevant branches.\n---", allBranches.size());
 
 	// Get all current branches (snapshot):	
 	final ImmutableSortedSet<BranchId> existingBranches = subProjectRegistry.getBranches();
-	log.println(format("---\nCurrently there are sub-projects for the following {} branches:", existingBranches.size()));
-	logList(log, existingBranches);
+	logList(listener, "---\nCurrently there are sub-projects for the following {} branches:", existingBranches);
 	
 	final ImmutableSortedSet<BranchId> newBranches = copyOf(Sets.difference(allBranches, existingBranches));
 	forEach(newBranches, new Consumer<BranchId>(){
 		@Override
-		public void accept(final BranchId branch) {
+		public void accept(final BranchId branch) throws ProjectAlreadyExixtsException {
 			subProjectRegistry.createNewSubProject(branch);			
 		}}, listener, "---\nCreating {} new sub-projects:");
 
 	final ImmutableSortedSet<BranchId> branchesToDelete = copyOf(Sets.difference(existingBranches, allBranches));
 	forEach(branchesToDelete, new Consumer<BranchId>(){
 		@Override
-		public void accept(final BranchId branch) throws IOException, InterruptedException {
+		public void accept(final BranchId branch) throws IOException, InterruptedException, ProjectDoesNotExixtException {
 			subProjectRegistry.delete(branch);			
 		}}, listener, "---\nDeleting {} old sub-projects:");
 	
@@ -205,7 +203,7 @@ private void doSynchronizeBranches(
 			getProjectSynchronizer(branch, scmSource, listener).call();			
 		}}, listener, "---\nSynchronizing {} sub-projects:");
 	
-	log.println("Updating Jenkins");
+	listener.info("Updating Jenkins");
 	jenkinsUpdate.run();
 
 	// Trigger build for new branches
@@ -221,21 +219,23 @@ private void doSynchronizeBranches(
 }
 
 
-private void logList(final PrintStream log,
-		final Iterable<?> items) {
-	for(final Object item: items) log.println(format(" * {}", item));
-  }
+private void logList(final SyncListener log,
+		final String msg, final Collection<?> items) {
+	final StringBuilder sb = new StringBuilder(format(msg, items.size()));
+	for(final Object item: items) sb.append(format("\n * {}", item));
+	
+}
 
 
-private ImmutableSortedSet<BranchId> fetchBranches(final SCMSource scmSource, final TaskListener listener) throws InterruptedException, IOException {
-	final ImmutableSortedSet<BranchId> all = copyOf(transform(ImmutableList.copyOf(scmSource.fetch(listener)), 
+private ImmutableSortedSet<BranchId> fetchBranches(final SCMSource scmSource, final SyncListener listener) throws InterruptedException, IOException {
+	final ImmutableSortedSet<BranchId> all = copyOf(transform(ImmutableList.copyOf(scmSource.fetch(listener.asTaskListener())), 
 			Functions.fromSCMHead(branchNameMapper)));
 	final ImmutableSortedSet<BranchId> selected = copyOf(branchFilter.apply(all));
 	return selected;
 }
 
 
-protected Callable<Void> getProjectSynchronizer(final BranchId branch, final SCMSource scmSource, final LoggingTaskListener listener) 
+protected Callable<Void> getProjectSynchronizer(final BranchId branch, final SCMSource scmSource, final SyncListener listener) 
 		throws IOException {
 	final SubProject<P> templateProject = subProjectRegistry.getTemplateProject();
 	final SubProject<P> subProject = subProjectRegistry.getProject(branch);
@@ -244,20 +244,22 @@ protected Callable<Void> getProjectSynchronizer(final BranchId branch, final SCM
 
 
 private <T> void forEach(final Collection<? extends T> elements, final Consumer<T> action, 
-		final LoggingTaskListener listener, final String message)
+		final SyncListener listener, final String message)
 		throws InterruptedException {
-	final PrintStream log = listener.getLogger();
-	log.println(format(message, elements.size()));
-	logList(log, elements);
+	logList(listener, message, elements);
 	for (final T element : elements) {
 		try{
 			action.accept(element);
-			log.println(format("{}: DONE.",element));
+			listener.info("{}: DONE.",element);
 		} catch (final InterruptedException e) {
-			listener.error(format("Interrupted while doing {}.",element));
+			listener.error("Interrupted while doing {}.",element);
 			throw e;
+		} catch (final ProjectDoesNotExixtException e) {
+			listener.info("{}: SKIPPED (Project does not exist any more).",element);
+		} catch (final ProjectAlreadyExixtsException e) {
+			listener.info("{}: SKIPPED (Project does exist now).",element);
 		} catch (final Exception e) {
-			listener.fatalError(e, format("{}: FAILED. Exception: ",element));
+			listener.error(e, "{}: FAILED. Exception: ",element);
 		}
 	}
 }

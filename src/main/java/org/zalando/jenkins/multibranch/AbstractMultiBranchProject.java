@@ -64,6 +64,7 @@ import hudson.views.ViewsTabBar;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.io.UnsupportedEncodingException;
@@ -100,11 +101,11 @@ import org.kohsuke.stapler.export.Exported;
 import org.kohsuke.stapler.interceptor.RequirePOST;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.zalando.jenkins.multibranch.SubProjectRepository.ProjectDoesNotExixtException;
 import org.zalando.jenkins.multibranch.impl.StaticWiring;
 
 import antlr.ANTLRException;
 
-import org.zalando.jenkins.multibranch.Messages;
 import com.google.common.base.Function;
 
 
@@ -415,8 +416,12 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 		try {
 			w.getSubProjectRepository().delete(branch);
 		} catch (final InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			final InterruptedIOException iioe = 
+					new InterruptedIOException(format("Deletion of {} was interrupted.", subProject));
+			iioe.initCause(e);
+			throw iioe;
+		} catch (final ProjectDoesNotExixtException e) {
+			LOG.warn(format("Could not delete {}.", subProject), e);
 		}
 	}
 

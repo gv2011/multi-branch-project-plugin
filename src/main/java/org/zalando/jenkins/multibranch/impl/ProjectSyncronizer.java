@@ -29,11 +29,9 @@ import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
 import hudson.model.Item;
 import hudson.model.ItemGroup;
-import hudson.model.TaskListener;
 import hudson.scm.NullSCM;
 import hudson.scm.SCM;
 
-import java.io.PrintStream;
 import java.util.concurrent.Callable;
 
 import jenkins.scm.api.SCMSource;
@@ -46,13 +44,13 @@ public class ProjectSyncronizer<P extends AbstractProject<P,R>,R extends Abstrac
 	private final SubProject<P> templateProject;
 	private final SubProject<P> subProject;
 	private final SCMSource scmSource;
-	private final TaskListener listener;
+	private final SyncListener listener;
 	
 	
 	
 	public ProjectSyncronizer(final ItemGroup<? extends Item> parentProject,
 			final SubProject<P> templateProject, final SubProject<P> subProject,
-			final SCMSource scmSource, final TaskListener listener) {
+			final SCMSource scmSource, final SyncListener listener) {
 		super();
 		this.parentProject = parentProject;
 		this.templateProject = templateProject;
@@ -66,9 +64,7 @@ public class ProjectSyncronizer<P extends AbstractProject<P,R>,R extends Abstrac
 	@Override
 	public Void call() throws Exception {
 		if(subProject.isTemplate()) throw new UnsupportedOperationException();
-		final PrintStream log = listener.getLogger();
-		log.println(
-				"Syncing configuration to project "+ subProject.name());
+		listener.info("Syncing configuration to project {}.", subProject.name());
 		final XmlFile configFile = templateProject.delegate().getConfigFile();
 		final P delegate = subProject.delegate();
 		configFile.unmarshal(delegate);

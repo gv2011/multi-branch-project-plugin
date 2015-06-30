@@ -41,9 +41,15 @@ List<P> getDelegates();
 @Nullable
 SubProject<P> getProject(final BranchId branch);
 
-void delete(final BranchId project) throws IOException, InterruptedException;
+void delete(final BranchId project) throws IOException, InterruptedException, ProjectDoesNotExixtException;
 
 public void ensureInitialized();
 
+public static final class ProjectDoesNotExixtException extends Exception{
+	private static final long serialVersionUID = -3355036226913409225L;
+	public ProjectDoesNotExixtException(final String message) {
+		super(message);
+	}		
+}
 
 }

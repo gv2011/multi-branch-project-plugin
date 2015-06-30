@@ -23,6 +23,7 @@
  */
 package org.zalando.jenkins.multibranch.impl;
 
+import static org.zalando.jenkins.multibranch.util.FormattingUtils.format;
 import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
 import hudson.model.Item;
@@ -68,10 +69,11 @@ implements SubProjectFactory<P>{
 	}
 	
 	@Override
-	public SubProject<P> createNewSubProject(final BranchId branch) {
+	public SubProject<P> createNewSubProject(final BranchId branch) throws ProjectAlreadyExixtsException {
 		final String name = branch.toProjectName();
 		final Path subProjectDirectory = subProjectsDirectory.resolve(name);
-		if(Files.exists(subProjectDirectory)) throw new IllegalStateException("Not empty.");
+		if(Files.exists(subProjectDirectory)) throw new ProjectAlreadyExixtsException(
+				format("Cannot create new sub-project {}, because it already exists.", branch));
 		final P delegate = createDelegate(name);
 		return new SubProjectImpl<P>(branch, subProjectDirectory, delegate);
 	}

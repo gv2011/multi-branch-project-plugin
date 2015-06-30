@@ -29,10 +29,17 @@ import java.nio.file.Path;
 
 public interface SubProjectFactory<P> {
 
-	SubProject<P> createNewSubProject(BranchId branch);
+	SubProject<P> createNewSubProject(BranchId branch) throws ProjectAlreadyExixtsException;
 
 	SubProject<P> getTemplateProject();
 
 	SubProject<P> loadExistingSubProject(Path directory) throws IOException;
+	
+	public static final class ProjectAlreadyExixtsException extends Exception{
+		private static final long serialVersionUID = -7374240940711079664L;
+		public ProjectAlreadyExixtsException(final String message) {
+			super(message);
+		}		
+	}
 
 }
