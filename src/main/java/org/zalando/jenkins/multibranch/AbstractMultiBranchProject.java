@@ -371,7 +371,7 @@ implements TopLevelItem, ItemGroup<P>, ViewGroup, SCMSourceOwner {
 			project = null;
 		} else{
 			final BranchId branch = w.getBranchNameMapper().fromProjectName(name);
-			project = repo.getProject(branch);
+			project = repo.getOptionalProject(branch);
 		}
 		return project==null?null:project.delegate();
 	}

@@ -38,7 +38,7 @@ import jenkins.scm.api.SCMSource;
 
 import org.zalando.jenkins.multibranch.SubProject;
 
-public class ProjectSyncronizer<P extends AbstractProject<P,R>,R extends AbstractBuild<P,R>> implements Callable<Void>{
+class ProjectSynchronizer<P extends AbstractProject<P,R>,R extends AbstractBuild<P,R>> implements Callable<Void>{
 	
 	private final ItemGroup<? extends Item> parentProject;
 	private final SubProject<P> templateProject;
@@ -48,7 +48,7 @@ public class ProjectSyncronizer<P extends AbstractProject<P,R>,R extends Abstrac
 	
 	
 	
-	public ProjectSyncronizer(final ItemGroup<? extends Item> parentProject,
+	ProjectSynchronizer(final ItemGroup<? extends Item> parentProject,
 			final SubProject<P> templateProject, final SubProject<P> subProject,
 			final SCMSource scmSource, final SyncListener listener) {
 		super();

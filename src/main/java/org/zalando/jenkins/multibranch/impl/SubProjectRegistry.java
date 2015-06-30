@@ -132,12 +132,19 @@ implements SubProjectRepository<P>{
 
 	@Override
 	@Nullable
-	public SubProject<P> getProject(final BranchId branch) {
+	public SubProject<P> getOptionalProject(final BranchId branch) {
 		lock();
 		try{
 			ensureInitialized();
 			return projects.get(branch);
 		} finally{unlock();}
+	}
+	
+	@Override
+	public SubProject<P> getProject(final BranchId branch) throws ProjectDoesNotExixtException {
+		final SubProject<P> result = getOptionalProject(branch);
+		if(result==null) throw new ProjectDoesNotExixtException(format("There is no project for brnach {}.", branch));
+		return result;
 	}
 	
 	
@@ -238,7 +245,7 @@ implements SubProjectRepository<P>{
 		try{
 			ensureInitialized();
 			branchChangeDates.put(branch, lastChange);
-			final SubProject<P> project = getProject(branch);
+			final SubProject<P> project = getOptionalProject(branch);
 			if(project!=null) project.setLastScmChange(lastChange);
 		} finally{unlock();}
 	}

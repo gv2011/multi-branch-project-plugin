@@ -236,10 +236,10 @@ private ImmutableSortedSet<BranchId> fetchBranches(final SCMSource scmSource, fi
 
 
 protected Callable<Void> getProjectSynchronizer(final BranchId branch, final SCMSource scmSource, final SyncListener listener) 
-		throws IOException {
+		throws IOException, ProjectDoesNotExixtException {
 	final SubProject<P> templateProject = subProjectRegistry.getTemplateProject();
 	final SubProject<P> subProject = subProjectRegistry.getProject(branch);
-	return new ProjectSyncronizer<P,R>(parentProject, templateProject, subProject, scmSource, listener);
+	return new ProjectSynchronizer<P,R>(parentProject, templateProject, subProject, scmSource, listener);
 	}
 
 

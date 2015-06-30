@@ -38,8 +38,10 @@ public interface SubProjectRepository<P> extends SubProjectFactory<P>, BranchAge
 	
 List<P> getDelegates();
 
+SubProject<P> getProject(final BranchId branch) throws ProjectDoesNotExixtException;
+
 @Nullable
-SubProject<P> getProject(final BranchId branch);
+SubProject<P> getOptionalProject(final BranchId branch);
 
 void delete(final BranchId project) throws IOException, InterruptedException, ProjectDoesNotExixtException;
 
