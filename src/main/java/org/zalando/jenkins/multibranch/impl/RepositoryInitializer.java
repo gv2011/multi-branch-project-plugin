@@ -70,7 +70,7 @@ void loadFromDisk(final SubProjectRegistry<?,?,?> repository) throws IOException
 			} catch (final Exception e) {
 				LOG.error(format("Could not load project from directory {}. This will make it "
 						+ "impossible to build a branch with name {}.", subDir, 
-						mapper.fromDirectory(subDir)));
+						mapper.fromDirectory(subDir)), e);
 			}
 		}
 	}
