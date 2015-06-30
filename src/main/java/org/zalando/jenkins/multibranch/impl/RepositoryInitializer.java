@@ -59,12 +59,14 @@ void loadFromDisk(final SubProjectRegistry<?,?,?> repository) throws IOException
 		final Filter<Path> filter = new Filter<Path>() {
 			@Override
 			public boolean accept(final Path subDir) throws IOException {
-				return mapper.directorySupported(subDir);
+				final boolean accepted = mapper.directorySupported(subDir);
+				if(!accepted) LOG.debug("Ignoring directory {}.", subDir);
+				return accepted;
 			}
 		};
 		for (final Path subDir : Files.newDirectoryStream(subProjectsDirectory, filter)) {
 			try {
-				repository.loadExistingSubProject(subDir);
+				repository.loadExistingSubProjectInternal(subDir);
 			} catch (final Exception e) {
 				LOG.error(format("Could not load project from directory {}. This will make it "
 						+ "impossible to build a branch with name {}.", subDir, 

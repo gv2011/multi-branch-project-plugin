@@ -49,7 +49,7 @@ implements SubProjectFactory<P>{
 	private static final Logger LOG = LoggerFactory.getLogger(SubProjectFactoryImpl.class);
 
 	private final Class<P> projectClass;
-	private final PA parent;
+	protected final PA parent;
 	private final Path subProjectsDirectory;
 	private final Path templateDir;
 	private final String templateName;
@@ -125,6 +125,7 @@ implements SubProjectFactory<P>{
 
 	protected SubProject<P> loadExistingSubProject(final BranchId branch, final Path subProjectDir)
 			throws IOException {
+		LOG.info("Loading project from directory {}.", subProjectDir);
 		final Item item = (Item) Items.getConfigFile(subProjectDir.toFile()).read();
 		item.onLoad(parent, branch.toProjectName());
 
@@ -134,7 +135,8 @@ implements SubProjectFactory<P>{
 //		if (isDisabled() && !project.isDisabled()) {
 //			project.disable();
 //		}
-		return new SubProjectImpl<P>(branch, subProjectDir, delegate);
+		final SubProjectImpl<P> result = new SubProjectImpl<P>(branch, subProjectDir, delegate);
+		return result;
 	}
 
 	protected abstract P createDelegate(String name);

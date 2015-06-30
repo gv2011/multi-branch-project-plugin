@@ -116,6 +116,7 @@ implements SubProjectRepository<P>{
 	public void ensureInitialized() {
 		lock.checkLocked();
 		if(!initialized){
+			LOG.info("Initializing {}.", this);
 			boolean success = false;
 			try {
 				initialized = true; //Set this now to prevent recursion.
@@ -201,6 +202,10 @@ implements SubProjectRepository<P>{
 				format("Loading is handled by the {} itself.", SubProjectRepository.class.getSimpleName()));
 	}
 
+	SubProject<P> loadExistingSubProjectInternal(final Path subProjectDir) throws IOException{
+		return super.loadExistingSubProject(subProjectDir);
+	}
+
 	@Override
 	public void delete(final BranchId branch) throws IOException,
 			InterruptedException {
@@ -250,6 +255,11 @@ implements SubProjectRepository<P>{
 	protected P createDelegate(final String name) {
 		lock.checkLocked();
 		return delegateConstructor.apply(name);
+	}
+
+	@Override
+	public String toString() {
+		return format("{}[{}]",SubProjectRegistry.class.getSimpleName(), parent);
 	}
 
 	
