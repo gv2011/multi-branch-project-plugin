@@ -31,11 +31,18 @@ import java.nio.file.Path;
 
 import jenkins.scm.api.SCMHead;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.zalando.jenkins.multibranch.BranchId;
 import org.zalando.jenkins.multibranch.BranchNameMapper;
 
 final class BranchNameMapperImpl implements BranchNameMapper {
+
+	private static Logger LOG = LoggerFactory.getLogger(BranchNameMapperImpl.class);
 	
+	private static final String PREFIX = "f-";
+
+
 	private final Path rootDirectory;
 	private final String templateProjectName;
 	
@@ -67,9 +74,18 @@ final class BranchNameMapperImpl implements BranchNameMapper {
 	
 	@Override
 	public boolean projectNameSupported(final String projectName) {
-		if(projectName==null) return false;
-		else if(equal(projectName, templateProjectName)) return false;
-		else return projectName.startsWith("f-") && noSpecialCharacters(projectName);
+		if(equal(projectName, templateProjectName)) {
+			LOG.debug("Project name {} is not supported because it is the template name.", projectName);
+			return false;
+		} else if(!projectName.startsWith(PREFIX)){
+			LOG.debug("Project name {} is not supported because it does not start with {}.", projectName, PREFIX);
+			return false;
+		}
+		else if(hasSpecialCharacters(projectName)){
+			LOG.debug("Project name {} is not supported because it has special characters.", projectName);
+			return false;
+		}
+		else return true;
 	}
 
 	@Override
@@ -86,7 +102,10 @@ final class BranchNameMapperImpl implements BranchNameMapper {
 	@Override
 	public boolean directorySupported(Path directory) {
 		directory = directory.toAbsolutePath().normalize();
-		if(!directory.getParent().equals(rootDirectory)) return false;
+		if(!directory.getParent().equals(rootDirectory)) {
+			LOG.debug("{} is not supported because it is not a child of {}.", directory, rootDirectory);
+			return false;
+		}
 		else return projectNameSupported(getProjectName(directory));
 	}
 	
@@ -100,8 +119,8 @@ final class BranchNameMapperImpl implements BranchNameMapper {
 		return "f-"+(branch.getName().substring("feature/".length()));
 	}
 
-	private boolean noSpecialCharacters(final String projectName) {
-		return Util.rawEncode(projectName).equals(projectName);
+	private boolean hasSpecialCharacters(final String projectName) {
+		return !Util.rawEncode(projectName).equals(projectName);
 	}
 
 	private String getProjectName(final Path directory) {
