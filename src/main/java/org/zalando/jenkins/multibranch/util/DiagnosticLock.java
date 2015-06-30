@@ -49,21 +49,28 @@ public final class DiagnosticLock implements Lock{
 	public DiagnosticLock(final String name, final Duration lockTimeout) {
 		this.name = name;
 		this.lockTimeout = lockTimeout;
+		LOG.info("Created {} with name {} and timeout of {}.", DiagnosticLock.class, name, lockTimeout);
 	}
 
 	@Override
 	public void lock() {
-		boolean success = false;
 		try {
-			success = lock.tryLock(lockTimeout.toMillis(), TimeUnit.MILLISECONDS);
-			if(!success) throw new IllegalStateException(format("{} is still locked after waiting {}.", this, lockTimeout));
+			final boolean aquired = lock.tryLock(lockTimeout.toMillis(), TimeUnit.MILLISECONDS);
+			if(!aquired) throw new IllegalStateException(format("{} is still locked after waiting {}.", this, lockTimeout));
 			assert lock.isHeldByCurrentThread();
-			success = false;
+			boolean success = false;
 			try{
-				beforeActions();
+				if(lock.getHoldCount()==1){
+				  LOG.debug("{} is now held by {}.", this, Thread.currentThread());
+				  beforeActions();
+				}
 				success = true;
 			} finally{
-				if(!success) lock.unlock();
+				//In case of any exceptions after obtaining the lock, release it again:
+				if(!success){
+					lock.unlock();
+					if(lock.getHoldCount()==0) LOG.debug("{} has been released by {}.", this, Thread.currentThread());
+				}
 			}
 		} catch (final InterruptedException e) {
 			throw new RuntimeException(
@@ -74,7 +81,7 @@ public final class DiagnosticLock implements Lock{
 	@Override
 	public void unlock() {
 		try{
-			afterActions();
+			if(lock.getHoldCount()==1) afterActions();
 		} finally{
 			lock.unlock();
 		}
@@ -86,14 +93,15 @@ public final class DiagnosticLock implements Lock{
 		warnTask = new TimerTask(){
 			@Override
 			public void run() {
-				Duration lockDuration = Duration.since(start);
+				final Duration lockDuration = Duration.since(start);
 				LOG.warn("{} is locked by {} for {} now.", DiagnosticLock.this, thread, lockDuration);
 				if(LOG.isDebugEnabled()){
 					if(lockDuration.compareTo(Duration.of(1, TimeUnit.MINUTES))>0){
-						StringBuilder sb = new StringBuilder("Current stack trace:\n");
-						for(StackTraceElement e: thread.getStackTrace()){
+						final StringBuilder sb = new StringBuilder("Current stack trace:\n");
+						for(final StackTraceElement e: thread.getStackTrace()){
 							sb.append("  ").append(e).append('\n');
 						}
+						LOG.debug(sb.toString());
 					}
 				}
 				thread.getStackTrace();
@@ -102,7 +110,8 @@ public final class DiagnosticLock implements Lock{
 	}
 
 	private void afterActions() {
-		warnTask.cancel();		
+		warnTask.cancel();
+		LOG.debug("{} will be released by {} now.", this, Thread.currentThread());
 	}
 
 	@Override

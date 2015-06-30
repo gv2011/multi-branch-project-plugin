@@ -155,7 +155,7 @@ final class BranchNameMapperImpl implements BranchNameMapper {
 		}
 		@Override
 		public String toString() {
-			return scmHead.toString();
+			return scmHead.getName();
 		}
 		@Override
 		public boolean equals(final Object obj) {
