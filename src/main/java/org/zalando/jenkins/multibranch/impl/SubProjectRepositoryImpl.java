@@ -26,11 +26,12 @@ package org.zalando.jenkins.multibranch.impl;
 import static com.google.common.collect.ImmutableSortedSet.copyOf;
 import static com.google.common.collect.Lists.transform;
 import static org.zalando.jenkins.multibranch.util.FormattingUtils.format;
+import hudson.model.ItemGroup;
 import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
-import hudson.model.ItemGroup;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Date;
 import java.util.List;
@@ -56,7 +57,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Maps;
 
-class SubProjectRegistry<PA extends ItemGroup<P>, P extends AbstractProject<P,R>, R extends AbstractBuild<P,R>>
+class SubProjectRepositoryImpl<PA extends ItemGroup<P>, P extends AbstractProject<P,R>, R extends AbstractBuild<P,R>>
 extends SubProjectFactoryImpl<PA,P,R>
 implements SubProjectRepository<P>{
 	
@@ -76,7 +77,7 @@ implements SubProjectRepository<P>{
 
 	private boolean initialized;
 
-	public SubProjectRegistry(final Path parentDir, final Class<P> projectClass, final PA parent,
+	public SubProjectRepositoryImpl(final Path parentDir, final Class<P> projectClass, final PA parent,
 			final Path subProjectsDirectory, final Path templateDir, final String templateName,
 			final BranchNameMapper nameMapper, 
 			final Function<String,P> delegateConstructor) {
@@ -117,6 +118,7 @@ implements SubProjectRepository<P>{
 		lock.checkLocked();
 		if(!initialized){
 			LOG.info("Initializing {}.", this);
+			assert projects.isEmpty() && templateProject==null;
 			boolean success = false;
 			try {
 				initialized = true; //Set this now to prevent recursion.
@@ -199,18 +201,19 @@ implements SubProjectRepository<P>{
 			return project;
 		} finally{unlock();}
 	}
-	
+
 	
 
 	
 	@Override
 	public SubProject<P> loadExistingSubProject(final Path subProjectDir){
 		throw new UnsupportedOperationException(
-				format("Loading is handled by the {} itself.", SubProjectRepository.class.getSimpleName()));
+				format("Loading is handled by the {} itself and must not be done externally.", SubProjectRepository.class.getSimpleName()));
 	}
 
-	SubProject<P> loadExistingSubProjectInternal(final Path subProjectDir) throws IOException{
-		return super.loadExistingSubProject(subProjectDir);
+	void loadExistingSubProjectInternal(final Path subProjectDir) throws IOException{
+		lock.checkLocked();
+		super.loadExistingSubProject(subProjectDir);
 	}
 
 	@Override
@@ -225,6 +228,9 @@ implements SubProjectRepository<P>{
 				boolean success = false;
 				try{
 					project.delegate().delete();
+					final Path projectDir = project.rootDirectory();
+					if(Files.exists(projectDir)) throw new RuntimeException(
+							format("Directory {} of project {} has not been removed.", projectDir, project));
 					success = true;
 					LOG.info("Deleted and removed project {} (directory {}).", project, project.rootDirectory());
 				}finally{
@@ -266,7 +272,7 @@ implements SubProjectRepository<P>{
 
 	@Override
 	public String toString() {
-		return format("{}[{}]",SubProjectRegistry.class.getSimpleName(), parent);
+		return format("{}[{}]",SubProjectRepositoryImpl.class.getSimpleName(), parent);
 	}
 
 	

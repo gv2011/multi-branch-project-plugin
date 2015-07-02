@@ -26,23 +26,26 @@ package org.zalando.jenkins.multibranch.impl;
 import static com.google.common.collect.ImmutableSortedSet.copyOf;
 import static com.google.common.collect.Lists.transform;
 import static org.zalando.jenkins.multibranch.util.FormattingUtils.format;
-import hudson.model.AbstractBuild;
-import hudson.model.AbstractProject;
 import hudson.model.Item;
 import hudson.model.ItemGroup;
+import hudson.model.AbstractBuild;
+import hudson.model.AbstractProject;
 import hudson.security.ACL;
 import hudson.triggers.SCMTrigger;
+import hudson.util.StreamTaskListener;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Date;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import jenkins.model.Jenkins;
+import jenkins.scm.api.SCMHead;
 import jenkins.scm.api.SCMSource;
 
 import org.acegisecurity.Authentication;
@@ -148,14 +151,12 @@ private SyncListener createSyncListener(final Path logFile) {
 private Date logStart(final SyncListener listener) {
 	final Date start = new Date();
 	final String msg = format("Started on {}.",start);
-	LOG.info(msg);
 	listener.info(msg);
 	return start;
 }
 
 private void logFinished(final SyncListener listener, final Date start) {
 	final String msg = format("Done. Took {}.", Duration.since(start));
-	LOG.info(msg);
 	listener.info(msg);
 }
 
@@ -175,7 +176,7 @@ private void doSynchronizeBranches(
 	listener.info("Synchronizing branches as user {}.",user==null?null:user.getName()+".");
 	
 	// Get all SCM branches when this method starts (snapshot):
-	listener.info("---\nReading branches from {}.",scmSource);
+	listener.info("---\nReading branches from {}.", scmSource.getDescriptor());
 	final ImmutableSortedSet<BranchId> allBranches = fetchBranches(scmSource, listener);
 	listener.info("Finished. SCM currently contains {} relevant branches.\n---", allBranches.size());
 
@@ -228,7 +229,11 @@ private void logList(final SyncListener log,
 
 
 private ImmutableSortedSet<BranchId> fetchBranches(final SCMSource scmSource, final SyncListener listener) throws InterruptedException, IOException {
-	final ImmutableSortedSet<BranchId> all = copyOf(transform(ImmutableList.copyOf(scmSource.fetch(listener.asTaskListener())), 
+	Set<SCMHead> branches;
+	try(StreamTaskListener taskListener = listener.asTaskListener()){
+		branches = scmSource.fetch(taskListener);
+	}
+	final ImmutableSortedSet<BranchId> all = copyOf(transform(ImmutableList.copyOf(branches), 
 			Functions.fromSCMHead(branchNameMapper)));
 	final ImmutableSortedSet<BranchId> selected = copyOf(branchFilter.apply(all));
 	return selected;

@@ -72,7 +72,7 @@ public final class StaticWiring<PA extends ItemGroup<P>, P extends AbstractProje
 		
 		mapper = new BranchNameMapperImpl(subProjectsDirectory, templateName);
 
-		final SubProjectRegistry<PA, P, R> subProjectRegistry = new SubProjectRegistry<PA,P,R>(
+		final SubProjectRepositoryImpl<PA, P, R> subProjectRegistry = new SubProjectRepositoryImpl<PA,P,R>(
 				rootDirectory,
 				projectClass, 
 				parentProject,

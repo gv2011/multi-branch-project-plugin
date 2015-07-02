@@ -51,7 +51,7 @@ RepositoryInitializer(final BranchNameMapper mapper, final Path subProjectsDirec
 
 
 
-void loadFromDisk(final SubProjectRegistry<?,?,?> repository) throws IOException{
+void loadFromDisk(final SubProjectRepositoryImpl<?,?,?> repository) throws IOException{
 	repository.getTemplateProject();
 	if (Files.exists(subProjectsDirectory)) {
 		if (!Files.isDirectory(subProjectsDirectory))

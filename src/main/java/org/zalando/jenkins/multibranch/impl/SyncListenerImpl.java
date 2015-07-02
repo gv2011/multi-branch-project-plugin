@@ -1,7 +1,6 @@
 package org.zalando.jenkins.multibranch.impl;
 
 import static org.zalando.jenkins.multibranch.util.FormattingUtils.format;
-import hudson.model.TaskListener;
 import hudson.util.StreamTaskListener;
 
 import java.io.IOException;
@@ -80,7 +79,7 @@ class SyncListenerImpl implements SyncListener{
 	}
 
 	@Override
-	public TaskListener asTaskListener() {
+	public StreamTaskListener asTaskListener() {
 		try {
 			return new StreamTaskListener(new StreamImpl());
 		} catch (final IOException e) {throw new RuntimeException(e);}

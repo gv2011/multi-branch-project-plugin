@@ -1,6 +1,6 @@
 package org.zalando.jenkins.multibranch.impl;
 
-import hudson.model.TaskListener;
+import hudson.util.StreamTaskListener;
 
 import java.io.Closeable;
 
@@ -18,6 +18,6 @@ public interface SyncListener extends Closeable {
 
 	void info(String msgPattern, Object arg0);
 
-	TaskListener asTaskListener();
+	StreamTaskListener asTaskListener();
 
 }
