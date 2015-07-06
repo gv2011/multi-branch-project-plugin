@@ -24,11 +24,12 @@
 package org.zalando.jenkins.multibranch.impl;
 
 import static org.zalando.jenkins.multibranch.util.FormattingUtils.format;
-import hudson.model.AbstractBuild;
-import hudson.model.AbstractProject;
+import hudson.Util;
 import hudson.model.Item;
 import hudson.model.ItemGroup;
 import hudson.model.Items;
+import hudson.model.AbstractBuild;
+import hudson.model.AbstractProject;
 import hudson.scm.NullSCM;
 
 import java.io.IOException;
@@ -46,10 +47,12 @@ abstract class SubProjectFactoryImpl<PA extends ItemGroup<P>, P extends Abstract
 implements SubProjectFactory<P>{
 
 	private static final Logger LOG = LoggerFactory.getLogger(SubProjectFactoryImpl.class);
+	
+	protected static final String CONFIG_FILE_NAME = "config.xml";
 
 	private final Class<P> projectClass;
 	protected final PA parent;
-	private final Path subProjectsDirectory;
+	protected final Path subProjectsDirectory;
 	private final Path templateDir;
 	private final String templateName;
 	protected final BranchNameMapper nameMapper;
@@ -68,9 +71,14 @@ implements SubProjectFactory<P>{
 	}
 	
 	@Override
-	public SubProject<P> createNewSubProject(final BranchId branch) throws ProjectAlreadyExixtsException {
+	public SubProject<P> createNewSubProject(final BranchId branch) throws ProjectAlreadyExixtsException, IOException {
 		final String name = branch.toProjectName();
 		final Path subProjectDirectory = subProjectsDirectory.resolve(name);
+		final Path configFile = subProjectDirectory.resolve(CONFIG_FILE_NAME);
+		if(Files.exists(subProjectDirectory) && Files.exists(configFile)) {
+			LOG.warn("Project directory {} exists, but does not contain a config file. Deleting the directory.", subProjectDirectory);
+			Util.deleteRecursive(subProjectDirectory.toFile());
+		}
 		if(Files.exists(subProjectDirectory)) throw new ProjectAlreadyExixtsException(
 				format("Cannot create new sub-project {}, because it already exists.", branch));
 		final P delegate = createDelegate(name);

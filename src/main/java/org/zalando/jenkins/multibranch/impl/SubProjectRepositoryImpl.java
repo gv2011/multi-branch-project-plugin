@@ -26,11 +26,13 @@ package org.zalando.jenkins.multibranch.impl;
 import static com.google.common.collect.ImmutableSortedSet.copyOf;
 import static com.google.common.collect.Lists.transform;
 import static org.zalando.jenkins.multibranch.util.FormattingUtils.format;
+import hudson.Util;
 import hudson.model.ItemGroup;
 import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
 
 import java.io.IOException;
+import java.nio.file.DirectoryStream.Filter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Date;
@@ -71,7 +73,6 @@ implements SubProjectRepository<P>{
 	private final Map<BranchId,SubProject<P>> projects = Maps.newHashMap();
 	private final Function<String,P> delegateConstructor;
 	private final Map<BranchId,Date> branchChangeDates = new WeakHashMap<>();
-	private final RepositoryInitializer initializer;
 	
 	private SubProject<P> templateProject;
 
@@ -86,7 +87,6 @@ implements SubProjectRepository<P>{
 		checkOnlyOneInstancePerDirectory(parentDir);
 		this.delegateConstructor = delegateConstructor;
 		lock = new DiagnosticLock(parent.getFullName(), LOCK_TIMEOUT);
-		initializer = new RepositoryInitializer(nameMapper, subProjectsDirectory);
 	}
 
 	private static void checkOnlyOneInstancePerDirectory(final Path parentDir) {
@@ -122,7 +122,7 @@ implements SubProjectRepository<P>{
 			boolean success = false;
 			try {
 				initialized = true; //Set this now to prevent recursion.
-				initializer.loadFromDisk(this);
+				loadFromDisk();
 				success = true;
 			} catch (final IOException e) {
 				throw new IllegalStateException("Initialization failed.");
@@ -162,7 +162,7 @@ implements SubProjectRepository<P>{
 	}
 
 	@Override
-	public SubProject<P> createNewSubProject(final BranchId branch) throws ProjectAlreadyExixtsException {
+	public SubProject<P> createNewSubProject(final BranchId branch) throws ProjectAlreadyExixtsException, IOException {
 		lock();
 		try{
 			ensureInitialized();
@@ -209,11 +209,6 @@ implements SubProjectRepository<P>{
 	public SubProject<P> loadExistingSubProject(final Path subProjectDir){
 		throw new UnsupportedOperationException(
 				format("Loading is handled by the {} itself and must not be done externally.", SubProjectRepository.class.getSimpleName()));
-	}
-
-	void loadExistingSubProjectInternal(final Path subProjectDir) throws IOException{
-		lock.checkLocked();
-		super.loadExistingSubProject(subProjectDir);
 	}
 
 	@Override
@@ -276,4 +271,37 @@ implements SubProjectRepository<P>{
 	}
 
 	
+	private void loadFromDisk() throws IOException{
+		lock.checkLocked();
+		getTemplateProject();
+		if (Files.exists(subProjectsDirectory)) {
+			if (!Files.isDirectory(subProjectsDirectory))
+				throw new IllegalStateException(format("{} is not a directory.", subProjectsDirectory));
+			final Filter<Path> filter = new Filter<Path>() {
+				@Override
+				public boolean accept(final Path subDir) throws IOException {
+					final boolean accepted = nameMapper.directorySupported(subDir);
+					if(!accepted) LOG.debug("Ignoring directory {}.", subDir);
+					return accepted;
+				}
+			};
+			for (final Path subDir : Files.newDirectoryStream(subProjectsDirectory, filter)) {
+				try {
+					final Path configFile = subDir.resolve(CONFIG_FILE_NAME);
+					if(Files.exists(configFile)){
+						super.loadExistingSubProject(subDir);
+					}else{
+						LOG.warn("Found broken project directory {}. Deleting it.", subDir);
+						Util.deleteRecursive(subDir.toFile());
+						if(Files.exists(subDir)) throw new IllegalStateException(format("{} has not been deleted.", subDir));
+					}
+				} catch (final Exception e) {
+					LOG.error(format("Could not load project from directory {}. This will make it "
+							+ "impossible to build a branch with name {}.", subDir, 
+							nameMapper.fromDirectory(subDir)), e);
+				}
+			}
+		}
+	}
+
 }

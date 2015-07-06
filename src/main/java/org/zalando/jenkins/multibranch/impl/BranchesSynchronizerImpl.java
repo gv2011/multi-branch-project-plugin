@@ -187,7 +187,7 @@ private void doSynchronizeBranches(
 	final ImmutableSortedSet<BranchId> newBranches = copyOf(Sets.difference(allBranches, existingBranches));
 	forEach(newBranches, new Consumer<BranchId>(){
 		@Override
-		public void accept(final BranchId branch) throws ProjectAlreadyExixtsException {
+		public void accept(final BranchId branch) throws ProjectAlreadyExixtsException, IOException {
 			subProjectRegistry.createNewSubProject(branch);			
 		}}, listener, "---\nCreating {} new sub-projects:");
 

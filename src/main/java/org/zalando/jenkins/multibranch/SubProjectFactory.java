@@ -29,7 +29,7 @@ import java.nio.file.Path;
 
 public interface SubProjectFactory<P> {
 
-	SubProject<P> createNewSubProject(BranchId branch) throws ProjectAlreadyExixtsException;
+	SubProject<P> createNewSubProject(BranchId branch) throws ProjectAlreadyExixtsException, IOException;
 
 	SubProject<P> getTemplateProject();
 
