@@ -25,11 +25,11 @@ package org.zalando.jenkins.multibranch.impl;
 
 import static org.zalando.jenkins.multibranch.util.FormattingUtils.format;
 import hudson.Util;
+import hudson.model.AbstractBuild;
+import hudson.model.AbstractProject;
 import hudson.model.Item;
 import hudson.model.ItemGroup;
 import hudson.model.Items;
-import hudson.model.AbstractBuild;
-import hudson.model.AbstractProject;
 import hudson.scm.NullSCM;
 
 import java.io.IOException;
@@ -75,7 +75,7 @@ implements SubProjectFactory<P>{
 		final String name = branch.toProjectName();
 		final Path subProjectDirectory = subProjectsDirectory.resolve(name);
 		final Path configFile = subProjectDirectory.resolve(CONFIG_FILE_NAME);
-		if(Files.exists(subProjectDirectory) && Files.exists(configFile)) {
+		if(Files.exists(subProjectDirectory) && !Files.exists(configFile)) {
 			LOG.warn("Project directory {} exists, but does not contain a config file. Deleting the directory.", subProjectDirectory);
 			Util.deleteRecursive(subProjectDirectory.toFile());
 		}
