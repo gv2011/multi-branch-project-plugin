@@ -27,9 +27,9 @@ import static com.google.common.collect.ImmutableSortedSet.copyOf;
 import static com.google.common.collect.Lists.transform;
 import static org.zalando.jenkins.multibranch.util.FormattingUtils.format;
 import hudson.Util;
-import hudson.model.ItemGroup;
 import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
+import hudson.model.ItemGroup;
 
 import java.io.IOException;
 import java.nio.file.DirectoryStream.Filter;
@@ -249,13 +249,16 @@ implements SubProjectRepository<P>{
 			final SubProject<P> project = getOptionalProject(branch);
 			if(project!=null) project.setLastScmChange(lastChange);
 		} finally{unlock();}
+		LOG.debug("Registered last change of {} at {}.", branch, lastChange);
 	}
 
 	public @Nullable Date getLastChange(final BranchId branch) {
 		lock();
 		try{
 			ensureInitialized();
-			return branchChangeDates.get(branch);
+			final Date lastChange = branchChangeDates.get(branch);
+			if(lastChange==null)LOG.warn("Last change date of {} unknown.", branch);
+			return lastChange;
 		} finally{unlock();}
 	}
 

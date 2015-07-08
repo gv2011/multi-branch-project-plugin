@@ -28,6 +28,7 @@ import static org.zalando.jenkins.multibranch.util.FormattingUtils.format;
 import hudson.Util;
 
 import java.nio.file.Path;
+import java.util.WeakHashMap;
 
 import jenkins.scm.api.SCMHead;
 
@@ -42,9 +43,11 @@ final class BranchNameMapperImpl implements BranchNameMapper {
 	
 	private static final String PREFIX = "f-";
 
-
+	private final WeakHashMap<BranchId,BranchId> canonicalIds = new WeakHashMap<>();
+	
 	private final Path rootDirectory;
 	private final String templateProjectName;
+	
 	
 	BranchNameMapperImpl(final Path rootDirectory, final String templateProjectName) {
 		this.rootDirectory = rootDirectory.toAbsolutePath().normalize();
@@ -55,20 +58,37 @@ final class BranchNameMapperImpl implements BranchNameMapper {
 	@Override
 	public BranchId fromProjectName(final String projectName) {
 		if(!projectNameSupported(projectName))
-			throw new IllegalArgumentException(format("The project name \"{}\" is not supported.", projectName));
-		return new BranchIdImp(new SCMHead("feature/"+(projectName.substring("f-".length()))));
+			throw new IllegalArgumentException(format("The project name \"{}\" is not supported.", projectName));		
+		return forHead(new SCMHead("feature/"+(projectName.substring("f-".length()))));
 	}
+
+	/**
+	 * @param scmHead
+	 * @return a cononical instance. This allows the use of weak maps with BranchId as key at other places.
+	 */
+	private BranchId forHead(final SCMHead scmHead) {
+		final BranchId branchId = new BranchIdImp(scmHead);
+		synchronized(canonicalIds){
+			BranchId result = canonicalIds.get(branchId);
+			if(result==null){
+				result = branchId;
+				canonicalIds.put(branchId, result);
+			}
+			return result;			
+		}
+	}
+
 
 	@Override
 	public BranchId fromSCMHead(final SCMHead branch) {
 		if(!branchNameSupported(branch)) throw new IllegalArgumentException();
-		return new BranchIdImp(branch);
+		return forHead(branch);
 	}
 
 	@Override
 	public BranchId fromDirectory(final Path directory) {
 		if(!directorySupported(directory)) throw new IllegalArgumentException();
-		return new BranchIdImp(getBranch(getProjectName(directory)));
+		return forHead(getBranch(getProjectName(directory)));
 	}
 
 	
